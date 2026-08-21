@@ -17,6 +17,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -33,19 +38,21 @@ public class SecurityConfig {
         // (2) Tắt CSRF
         .csrf(AbstractHttpConfigurer::disable)
 
-        // (3) Quy định endpoint nào cần auth, endpoint nào không
-        .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/api/auth/**").permitAll() // đăng ký, đăng nhập → ai cũng vào được
-            .anyRequest().authenticated() // còn lại → phải có token
-        )
+        // (3) Bật CORS
+        .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-        // (4) Không dùng session
+        // (4) Quy định endpoint nào cần auth, endpoint nào không
+        .authorizeHttpRequests(auth -> auth
+            .requestMatchers("/api/auth/**").permitAll()
+            .anyRequest().authenticated())
+
+        // (5) Không dùng session
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-        // (5) Gắn authentication provider
+        // (6) Gắn authentication provider
         .authenticationProvider(authenticationProvider())
 
-        // (6) Gắn JWT filter vào trước filter mặc định
+        // (7) Gắn JWT filter vào trước filter mặc định
         .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
     return http.build();
@@ -70,5 +77,19 @@ public class SecurityConfig {
   @Bean
   public PasswordEncoder passwordEncoder() {
     return new BCryptPasswordEncoder();
+  }
+
+  // (10) CORS — cho phép FE localhost:3000 gọi API
+  @Bean
+  public CorsConfigurationSource corsConfigurationSource() {
+    CorsConfiguration config = new CorsConfiguration();
+    config.setAllowedOrigins(List.of("http://localhost:3000"));
+    config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+    config.setAllowedHeaders(List.of("*"));
+    config.setAllowCredentials(true);
+
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/**", config);
+    return source;
   }
 }
