@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import {
   FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { useLogin, useRegister } from "@/hooks/use-auth";
 
 type Mode = "login" | "register";
 
@@ -21,12 +23,64 @@ export function AuthCard({ className, ...props }: React.ComponentProps<"div">) {
   const [mode, setMode] = useState<Mode>("login");
   const [direction, setDirection] = useState(1);
 
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const loginMutation = useLogin();
+  const registerMutation = useRegister();
+
+  const isLogin = mode === "login";
+  const isPending = loginMutation.isPending || registerMutation.isPending;
+
+  const resetForm = () => {
+    setEmail("");
+    setPassword("");
+    setConfirmPassword("");
+    setFullName("");
+    setError("");
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+  };
+
+  // Reset khi vào màn
+  useEffect(() => {
+    resetForm();
+  }, []);
+
   const switchTo = (next: Mode) => {
     setDirection(next === "register" ? 1 : -1);
     setMode(next);
+    resetForm();
   };
 
-  const isLogin = mode === "login";
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!isLogin && password !== confirmPassword) {
+      setError("Mật khẩu xác nhận không khớp");
+      return;
+    }
+
+    try {
+      if (isLogin) {
+        await loginMutation.mutateAsync({ email, password });
+      } else {
+        await registerMutation.mutateAsync({ email, password, fullName });
+      }
+      resetForm();
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data
+          ?.message ?? "Đã có lỗi xảy ra, vui lòng thử lại";
+      setError(message);
+    }
+  };
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -64,6 +118,7 @@ export function AuthCard({ className, ...props }: React.ComponentProps<"div">) {
                 exit={{ opacity: 0, x: direction * -40 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
                 className="p-6 md:p-8 h-full"
+                onSubmit={handleSubmit}
               >
                 <FieldGroup>
                   <div className="flex flex-col items-center gap-2 text-center">
@@ -83,7 +138,9 @@ export function AuthCard({ className, ...props }: React.ComponentProps<"div">) {
                       <Input
                         id="fullName"
                         type="text"
-                        placeholder="Nguyễn Văn A"
+                        placeholder="Nhập họ và tên"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
                         required
                       />
                     </Field>
@@ -94,7 +151,9 @@ export function AuthCard({ className, ...props }: React.ComponentProps<"div">) {
                     <Input
                       id="email"
                       type="email"
-                      placeholder="m@example.com"
+                      placeholder="Nhập email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
                       required
                     />
                   </Field>
@@ -111,7 +170,28 @@ export function AuthCard({ className, ...props }: React.ComponentProps<"div">) {
                         </a>
                       )}
                     </div>
-                    <Input id="password" type="password" required />
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        placeholder="Nhập mật khẩu"
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? (
+                          <EyeOff size={16} />
+                        ) : (
+                          <Eye size={16} />
+                        )}
+                      </button>
+                    </div>
                   </Field>
 
                   {!isLogin && (
@@ -119,13 +199,44 @@ export function AuthCard({ className, ...props }: React.ComponentProps<"div">) {
                       <FieldLabel htmlFor="confirmPassword">
                         Xác nhận mật khẩu
                       </FieldLabel>
-                      <Input id="confirmPassword" type="password" required />
+                      <div className="relative">
+                        <Input
+                          id="confirmPassword"
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={confirmPassword}
+                          placeholder="Xác nhận mật khẩu"
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword((v) => !v)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          tabIndex={-1}
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff size={16} />
+                          ) : (
+                            <Eye size={16} />
+                          )}
+                        </button>
+                      </div>
                     </Field>
                   )}
 
+                  {error && (
+                    <p className="text-sm text-destructive text-center">
+                      {error}
+                    </p>
+                  )}
+
                   <Field>
-                    <Button type="submit">
-                      {isLogin ? "Đăng nhập" : "Tạo tài khoản"}
+                    <Button type="submit" disabled={isPending}>
+                      {isPending
+                        ? "Đang xử lý..."
+                        : isLogin
+                          ? "Đăng nhập"
+                          : "Tạo tài khoản"}
                     </Button>
                   </Field>
 

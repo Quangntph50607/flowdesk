@@ -1,1 +1,1 @@
-// Export api client
+export { apiClient } from "./axios";
