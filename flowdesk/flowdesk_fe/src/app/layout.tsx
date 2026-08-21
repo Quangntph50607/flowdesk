@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Roboto } from "next/font/google";
 import { Providers } from "@/components/layout/providers";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 const roboto = Roboto({
@@ -22,7 +23,9 @@ export default function RootLayout({
   return (
     <html lang="vi" suppressHydrationWarning>
       <body className={`${roboto.variable} font-sans antialiased`}>
-        <Providers>{children}</Providers>
+        <Providers>
+          <TooltipProvider>{children}</TooltipProvider>
+        </Providers>
       </body>
     </html>
   );
