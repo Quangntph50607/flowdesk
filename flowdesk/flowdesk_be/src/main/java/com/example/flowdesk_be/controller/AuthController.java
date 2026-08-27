@@ -6,6 +6,9 @@ import com.example.flowdesk_be.dto.request.RegisterRequest;
 import com.example.flowdesk_be.dto.response.ApiResponse;
 import com.example.flowdesk_be.dto.response.AuthResponse;
 import com.example.flowdesk_be.service.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,11 +20,13 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Tag(name = "Auth", description = "Đăng ký, đăng nhập, refresh token, logout")
 public class AuthController {
 
   private final AuthService authService;
 
-  // Đăng ký — trả về cả access + refresh token
+  @Operation(summary = "Đăng ký tài khoản mới")
+  @SecurityRequirements // endpoint này không cần Bearer token
   @PostMapping("/register")
   public ResponseEntity<ApiResponse<AuthResponse>> register(
       @Valid @RequestBody RegisterRequest request) {
@@ -31,7 +36,8 @@ public class AuthController {
         .body(ApiResponse.success(201, "Đăng ký thành công", data));
   }
 
-  // Đăng nhập — trả về cả access + refresh token
+  @Operation(summary = "Đăng nhập", description = "Trả về accessToken (JWT) và refreshToken (UUID)")
+  @SecurityRequirements
   @PostMapping("/login")
   public ResponseEntity<ApiResponse<AuthResponse>> login(
       @Valid @RequestBody LoginRequest request) {
@@ -40,7 +46,8 @@ public class AuthController {
     return ResponseEntity.ok(ApiResponse.success(200, "Đăng nhập thành công", data));
   }
 
-  // Dùng refresh token để lấy access token mới (có rotate refresh token)
+  @Operation(summary = "Làm mới access token", description = "Dùng refreshToken để lấy accessToken mới. RefreshToken cũ sẽ bị rotate.")
+  @SecurityRequirements
   @PostMapping("/refresh")
   public ResponseEntity<ApiResponse<AuthResponse>> refresh(
       @Valid @RequestBody RefreshTokenRequest request) {
@@ -49,7 +56,7 @@ public class AuthController {
     return ResponseEntity.ok(ApiResponse.success(200, "Làm mới token thành công", data));
   }
 
-  // Logout thiết bị hiện tại — revoke refresh token đang dùng
+  @Operation(summary = "Đăng xuất thiết bị hiện tại", description = "Revoke refreshToken đang dùng")
   @PostMapping("/logout")
   public ResponseEntity<ApiResponse<Void>> logout(
       @Valid @RequestBody RefreshTokenRequest request) {
@@ -58,7 +65,7 @@ public class AuthController {
     return ResponseEntity.ok(ApiResponse.success(200, "Đăng xuất thành công", null));
   }
 
-  // Logout tất cả thiết bị — revoke toàn bộ refresh token của user
+  @Operation(summary = "Đăng xuất tất cả thiết bị", description = "Revoke toàn bộ refreshToken của user hiện tại")
   @PostMapping("/logout-all")
   public ResponseEntity<ApiResponse<Void>> logoutAll(
       @AuthenticationPrincipal UserDetails userDetails) {

@@ -131,6 +131,8 @@ public class AuthServiceImpl implements AuthService {
         "Bearer",
         user.getId(),
         user.getEmail(),
-        user.getFullName());
+        user.getFullName(),
+        user.getAvatarUrl(),
+        user.getSystemRole());
   }
 }

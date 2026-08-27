@@ -37,6 +37,15 @@ export function AuthCard({ className, ...props }: React.ComponentProps<"div">) {
   const isLogin = mode === "login";
   const isPending = loginMutation.isPending || registerMutation.isPending;
 
+  // Hiển thị lỗi từ mutation (ví dụ: không phải SUPER_ADMIN)
+  const mutationError =
+    (loginMutation.error as { message?: string } | null)?.message ||
+    (
+      registerMutation.error as {
+        response?: { data?: { message?: string } };
+      } | null
+    )?.response?.data?.message;
+
   const resetForm = () => {
     setEmail("");
     setPassword("");
@@ -75,10 +84,12 @@ export function AuthCard({ className, ...props }: React.ComponentProps<"div">) {
       }
       resetForm();
     } catch (err: unknown) {
-      const message =
-        (err as { response?: { data?: { message?: string } } })?.response?.data
-          ?.message ?? "Đã có lỗi xảy ra, vui lòng thử lại";
-      setError(message);
+      // Lỗi từ throw trong onSuccess (vd: không phải SUPER_ADMIN)
+      const throwMsg = (err as { message?: string })?.message;
+      // Lỗi từ API response
+      const apiMsg = (err as { response?: { data?: { message?: string } } })
+        ?.response?.data?.message;
+      setError(throwMsg || apiMsg || "Đã có lỗi xảy ra, vui lòng thử lại");
     }
   };
 
@@ -224,9 +235,9 @@ export function AuthCard({ className, ...props }: React.ComponentProps<"div">) {
                     </Field>
                   )}
 
-                  {error && (
+                  {(error || mutationError) && (
                     <p className="text-sm text-destructive text-center">
-                      {error}
+                      {error || mutationError}
                     </p>
                   )}
 

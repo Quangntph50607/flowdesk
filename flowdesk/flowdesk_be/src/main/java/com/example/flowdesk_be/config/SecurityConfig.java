@@ -44,6 +44,19 @@ public class SecurityConfig {
         // (4) Quy định endpoint nào cần auth, endpoint nào không
         .authorizeHttpRequests(auth -> auth
             .requestMatchers("/api/auth/**").permitAll()
+            // Swagger UI
+            .requestMatchers(
+                "/swagger-ui/**",
+                "/swagger-ui.html",
+                "/v3/api-docs/**",
+                "/v3/api-docs.yaml")
+            .permitAll()
+            // Chỉ SUPER_ADMIN mới được gọi /api/admin/**
+            .requestMatchers("/api/admin/**").hasRole("SUPER_ADMIN")
+            // SUPER_ADMIN và ADMIN được gọi /api/workspace/**
+            .requestMatchers("/api/workspace/**").hasAnyRole("SUPER_ADMIN", "ADMIN", "USER")
+            // Mọi user đã đăng nhập được gọi /api/me
+            .requestMatchers("/api/me").authenticated()
             .anyRequest().authenticated())
 
         // (5) Không dùng session

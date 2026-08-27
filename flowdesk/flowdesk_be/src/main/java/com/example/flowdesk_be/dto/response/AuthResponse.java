@@ -15,4 +15,6 @@ public class AuthResponse {
   private Long userId;
   private String email;
   private String fullName;
+  private String avatarUrl;
+  private String systemRole; // "SUPER_ADMIN" hoặc null
 }
