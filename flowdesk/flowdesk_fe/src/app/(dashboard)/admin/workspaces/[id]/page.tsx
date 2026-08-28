@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/page-header";
 import { workspaceService } from "@/services/workspace.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -30,7 +29,9 @@ import {
   PencilIcon,
   Trash2Icon,
   UsersIcon,
-  ArrowLeftIcon,
+  BuildingIcon,
+  GlobeIcon,
+  CheckCircle2Icon,
 } from "lucide-react";
 import Link from "next/link";
 import type { Workspace } from "@/types";
@@ -111,17 +112,32 @@ function BranchDialog({
 
   return (
     <Dialog open={open} onClose={onClose}>
-      <DialogContent onClose={onClose}>
-        <form onSubmit={handleSubmit}>
+      <DialogContent onClose={onClose} className="sm:max-w-md rounded-lg p-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>
-              {isEdit ? "Chỉnh sửa chi nhánh" : "Tạo chi nhánh mới"}
-            </DialogTitle>
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                <GitBranchIcon className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">
+                  {isEdit ? "Chỉnh sửa chi nhánh" : "Tạo chi nhánh mới"}
+                </DialogTitle>
+                <p className="text-xs text-muted-foreground">
+                  Phân cấp chi nhánh làm việc trong công ty
+                </p>
+              </div>
+            </div>
           </DialogHeader>
 
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="branch-name">Tên chi nhánh</Label>
+              <Label
+                htmlFor="branch-name"
+                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                Tên chi nhánh
+              </Label>
               <Input
                 id="branch-name"
                 value={name}
@@ -130,12 +146,18 @@ function BranchDialog({
                   if (!slugManual) setSlug(toSlug(e.target.value));
                 }}
                 placeholder="VD: Chi nhánh Hà Nội"
+                className="h-10 rounded-lg"
               />
             </div>
 
             {!isEdit && (
               <div className="space-y-1.5">
-                <Label htmlFor="branch-slug">Slug</Label>
+                <Label
+                  htmlFor="branch-slug"
+                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                >
+                  Slug chi nhánh
+                </Label>
                 <Input
                   id="branch-slug"
                   value={slug}
@@ -146,23 +168,31 @@ function BranchDialog({
                     );
                   }}
                   placeholder="VD: chi-nhanh-ha-noi"
+                  className="h-10 rounded-lg font-mono text-xs"
                 />
               </div>
             )}
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              <p className="text-xs text-destructive font-medium">{error}</p>
+            )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
               disabled={isPending}
+              className="rounded-lg h-10"
             >
               Huỷ
             </Button>
-            <Button type="submit" disabled={isPending}>
+            <Button
+              type="submit"
+              disabled={isPending}
+              className="rounded-lg h-10 bg-blue-600 hover:bg-blue-500 text-white font-medium"
+            >
               {isPending
                 ? "Đang lưu..."
                 : isEdit
@@ -179,7 +209,6 @@ function BranchDialog({
 // ── Branch card ───────────────────────────────────────────────
 function BranchCard({
   branch,
-  workspaceId,
   onEdit,
   onDelete,
 }: {
@@ -189,43 +218,64 @@ function BranchCard({
   onDelete: (id: number) => void;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border bg-card px-4 py-3 hover:bg-muted/40 transition-colors">
-      <div className="flex items-center gap-3">
-        <div className="flex size-8 items-center justify-center rounded-md bg-emerald-100 dark:bg-emerald-950">
-          <GitBranchIcon className="size-4 text-emerald-600 dark:text-emerald-400" />
+    <div className="group flex items-center justify-between rounded-lg border border-border/80 bg-card p-4 shadow-sm hover:border-emerald-500/30 hover:shadow-md transition-all">
+      <div className="flex items-center gap-3.5">
+        <div className="flex size-10 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+          <GitBranchIcon className="size-4" />
         </div>
         <div>
-          <p className="text-sm font-medium leading-none">{branch.name}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">/{branch.slug}</p>
+          <p className="text-sm font-semibold leading-tight text-foreground transition-colors group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+            {branch.name}
+          </p>
+          <p className="text-xs text-muted-foreground font-mono mt-0.5">
+            /{branch.slug}
+          </p>
         </div>
       </div>
 
       <div className="flex items-center gap-2">
-        <Badge variant={branch.isActive ? "success" : "destructive"}>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium border ${
+            branch.isActive
+              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+              : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+          }`}
+        >
+          <span
+            className={`size-1.5 rounded-full ${branch.isActive ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`}
+          />
           {branch.isActive ? "Hoạt động" : "Đã tắt"}
-        </Badge>
+        </span>
+
         <Link href={`/workspace/${branch.id}/members`}>
-          <Button variant="outline" size="sm" className="text-xs h-7">
-            <UsersIcon className="size-3" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs h-8 rounded-lg border-border/80 hover:bg-blue-500/10 hover:text-blue-600"
+          >
+            <UsersIcon className="size-3.5 mr-1" />
             Thành viên
           </Button>
         </Link>
+
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon" className="size-7" />}
-          >
+          <DropdownMenuTrigger className="flex size-8 items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0">
             <MoreHorizontalIcon className="size-4" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => onEdit(branch)}>
-              <PencilIcon className="size-3.5" /> Chỉnh sửa
+          <DropdownMenuContent align="end" className="w-48 rounded-lg">
+            <DropdownMenuItem
+              onSelect={() => onEdit(branch)}
+              className="cursor-pointer gap-2"
+            >
+              <PencilIcon className="size-3.5 text-amber-500" /> Chỉnh sửa
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
               onSelect={() => onDelete(branch.id)}
+              className="cursor-pointer gap-2"
             >
-              <Trash2Icon className="size-3.5" /> Xoá chi nhánh
+              <Trash2Icon className="size-3.5 text-rose-500" /> Xoá chi nhánh
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -267,14 +317,17 @@ export default function WorkspaceDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col bg-background">
         <PageHeader
           crumbs={[{ label: "Workspace", href: "/admin/workspaces" }]}
           title="..."
         />
-        <div className="p-6 space-y-3">
+        <div className="p-6 md:p-8 space-y-4 max-w-7xl w-full mx-auto">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />
+            <div
+              key={i}
+              className="h-16 rounded-lg bg-muted/60 animate-pulse"
+            />
           ))}
         </div>
       </div>
@@ -284,62 +337,107 @@ export default function WorkspaceDetailPage() {
   if (!workspace) return null;
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col bg-background">
       <PageHeader
         crumbs={[{ label: "Workspace", href: "/admin/workspaces" }]}
         title={workspace.name}
       />
 
-      <div className="flex-1 p-6 space-y-6">
-        {/* Info */}
-        <div className="rounded-xl border bg-card p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold">{workspace.name}</h2>
-              <p className="text-xs text-muted-foreground">/{workspace.slug}</p>
+      <div className="flex-1 p-6 md:p-8 space-y-6 max-w-7xl w-full mx-auto">
+        {/* Workspace Info Hero Header Card */}
+        <div className="rounded-lg border border-border/80 bg-card p-6 md:p-8 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 size-80 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+            <div className="flex items-center gap-4">
+              <div className="flex size-14 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20">
+                <BuildingIcon className="size-7" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                    {workspace.name}
+                  </h1>
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium border ${
+                      workspace.isActive
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                        : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                    }`}
+                  >
+                    <span
+                      className={`size-1.5 rounded-full ${workspace.isActive ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`}
+                    />
+                    {workspace.isActive ? "Hoạt động" : "Đã tắt"}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground font-mono">
+                  URL: /workspace/{workspace.slug}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={workspace.isActive ? "success" : "destructive"}>
-                {workspace.isActive ? "Hoạt động" : "Đã tắt"}
-              </Badge>
+
+            <div className="flex items-center gap-3">
               <Link href={`/admin/workspaces/${workspaceId}/edit`}>
-                <Button variant="outline" size="sm">
-                  <PencilIcon className="size-3.5" /> Chỉnh sửa
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-lg h-10 px-4 border-border/80"
+                >
+                  <PencilIcon className="size-4 mr-1.5 text-amber-500" /> Chỉnh
+                  sửa
                 </Button>
               </Link>
               <Link href={`/workspace/${workspaceId}/members`}>
-                <Button variant="outline" size="sm">
-                  <UsersIcon className="size-3.5" /> Thành viên
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-lg h-10 px-4 border-border/80"
+                >
+                  <UsersIcon className="size-4 mr-1.5 text-blue-500" /> Thành
+                  viên
                 </Button>
               </Link>
             </div>
           </div>
         </div>
 
-        {/* Branches */}
-        <div className="space-y-3">
+        {/* Branches list */}
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium">
-              Chi nhánh ({workspace.children?.length ?? 0})
-            </h3>
-            <Button size="sm" onClick={openCreate}>
-              <PlusIcon className="size-4" /> Thêm chi nhánh
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+              Danh sách chi nhánh ({workspace.children?.length ?? 0})
+            </h2>
+            <Button
+              size="sm"
+              onClick={openCreate}
+              className="rounded-lg h-9 px-3.5 bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-md shadow-blue-500/15"
+            >
+              <PlusIcon className="size-4 mr-1.5" /> Thêm chi nhánh
             </Button>
           </div>
 
           {!workspace.children || workspace.children.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border bg-card py-12 text-center">
-              <GitBranchIcon className="size-8 text-muted-foreground/40 mb-2" />
-              <p className="text-sm font-medium">Chưa có chi nhánh</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Thêm chi nhánh đầu tiên
+            <div className="flex flex-col items-center justify-center rounded-lg border border-border/80 bg-card py-16 text-center shadow-sm">
+              <div className="flex size-12 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500 mb-3">
+                <GitBranchIcon className="size-6" />
+              </div>
+              <p className="text-sm font-bold text-foreground">
+                Chưa có chi nhánh nào
               </p>
-              <Button size="sm" className="mt-3" onClick={openCreate}>
-                <PlusIcon className="size-4" /> Thêm chi nhánh
+              <p className="text-xs text-muted-foreground mt-1">
+                Tạo chi nhánh đầu tiên để mở rộng mô hình tổ chức
+              </p>
+              <Button
+                size="sm"
+                className="mt-4 rounded-lg h-9 px-4 bg-blue-600 hover:bg-blue-500 text-white"
+                onClick={openCreate}
+              >
+                <PlusIcon className="size-4 mr-1.5" /> Thêm chi nhánh ngay
               </Button>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="grid gap-3">
               {workspace.children.map((branch) => (
                 <BranchCard
                   key={branch.id}

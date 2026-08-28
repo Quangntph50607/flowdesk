@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Collapsible,
   CollapsibleContent,
@@ -34,7 +35,7 @@ export function NavMain({
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Menu</SidebarGroupLabel>
-      <SidebarMenu>
+      <SidebarMenu className="gap-1.5">
         {items.map((item) => {
           const hasChildren = item.items && item.items.length > 0;
 
@@ -44,10 +45,13 @@ export function NavMain({
               <SidebarMenuItem key={item.title}>
                 <SidebarMenuButton
                   tooltip={item.title}
-                  render={<a href={item.url} />}
+                  render={<Link href={item.url} />}
+                  className="h-10"
                 >
                   {item.icon}
-                  <span>{item.title}</span>
+                  <span className="group-data-[collapsible=icon]:hidden">
+                    {item.title}
+                  </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             );
@@ -62,7 +66,7 @@ export function NavMain({
               render={<SidebarMenuItem />}
             >
               <CollapsibleTrigger
-                render={<SidebarMenuButton tooltip={item.title} />}
+                render={<SidebarMenuButton tooltip={item.title} className="h-10" />}
               >
                 {item.icon}
                 <span>{item.title}</span>
@@ -72,7 +76,9 @@ export function NavMain({
                 <SidebarMenuSub>
                   {item.items?.map((subItem) => (
                     <SidebarMenuSubItem key={subItem.title}>
-                      <SidebarMenuSubButton render={<a href={subItem.url} />}>
+                      <SidebarMenuSubButton
+                        render={<Link href={subItem.url} />}
+                      >
                         <span>{subItem.title}</span>
                       </SidebarMenuSubButton>
                     </SidebarMenuSubItem>

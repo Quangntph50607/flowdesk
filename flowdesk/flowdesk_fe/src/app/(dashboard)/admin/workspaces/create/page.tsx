@@ -8,6 +8,12 @@ import { workspaceService } from "@/services/workspace.service";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  BuildingIcon,
+  GlobeIcon,
+  AlertCircleIcon,
+  PlusIcon,
+} from "lucide-react";
 
 // Tự động tạo slug từ tên
 function toSlug(str: string) {
@@ -67,7 +73,7 @@ export default function CreateWorkspacePage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex flex-1 flex-col bg-background">
       <PageHeader
         crumbs={[
           { label: "Tổng quan", href: "/dashboard" },
@@ -76,50 +82,89 @@ export default function CreateWorkspacePage() {
         title="Tạo Workspace mới"
       />
 
-      <div className="flex-1 p-6">
-        <div className="max-w-lg">
+      <div className="flex-1 p-6 md:p-8 max-w-2xl w-full mx-auto space-y-6">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Khởi tạo Workspace mới
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Tạo không gian làm việc chính cho công ty hoặc tổ chức
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border/80 bg-card p-6 md:p-8 shadow-sm">
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Tên */}
             <div className="space-y-1.5">
-              <Label htmlFor="name">Tên Workspace</Label>
-              <Input
-                id="name"
-                placeholder="VD: TechCorp Vietnam"
-                value={name}
-                onChange={(e) => handleNameChange(e.target.value)}
-              />
+              <Label
+                htmlFor="name"
+                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                Tên Workspace
+              </Label>
+              <div className="relative">
+                <BuildingIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                <Input
+                  id="name"
+                  placeholder="VD: TechCorp Vietnam"
+                  value={name}
+                  onChange={(e) => handleNameChange(e.target.value)}
+                  className="pl-10 h-11 rounded-lg border-border/80"
+                />
+              </div>
             </div>
 
             {/* Slug */}
             <div className="space-y-1.5">
-              <Label htmlFor="slug">Slug</Label>
+              <Label
+                htmlFor="ws-slug"
+                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+              >
+                Slug (Mã định danh URL)
+              </Label>
               <Input
-                id="slug"
-                placeholder="VD: techcorp-vn"
+                id="ws-slug"
                 value={slug}
-                onChange={(e) => handleSlugChange(e.target.value)}
+                onChange={(e) => {
+                  setSlugManual(true);
+                  setSlug(e.target.value);
+                }}
+                placeholder="techcorp"
+                className="h-11 rounded-lg font-mono text-sm"
               />
-              <p className="text-xs text-muted-foreground">
-                Chỉ dùng chữ thường, số và dấu gạch ngang. URL:{" "}
-                <code className="bg-muted px-1 rounded text-xs">
-                  /{slug || "..."}
+              <p className="text-[11px] text-muted-foreground">
+                Tự động tạo từ tên workspace nếu để trống. Sử dụng làm đường dẫn
+                URL:{" "}
+                <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono text-blue-600 dark:text-blue-400">
+                  /{slug || "slug-workspace"}
                 </code>
               </p>
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-xs font-medium border border-destructive/20">
+                {error}
+              </div>
+            )}
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex items-center justify-end gap-3 pt-4">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => router.back()}
                 disabled={createMutation.isPending}
+                className="rounded-lg h-11 px-5 border-border/80"
               >
                 Huỷ
               </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending ? "Đang tạo..." : "Tạo Workspace"}
+              <Button
+                type="submit"
+                disabled={createMutation.isPending}
+                className="rounded-lg h-11 px-6 bg-blue-600 hover:bg-blue-500 text-white font-semibold shadow-lg shadow-blue-500/20"
+              >
+                {createMutation.isPending
+                  ? "Đang tạo..."
+                  : "Khởi tạo Workspace"}
               </Button>
             </div>
           </form>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -29,12 +30,13 @@ function getInitials(name: string) {
   return name
     .split(" ")
     .map((n) => n[0])
-    .slice(0, 2)
     .join("")
-    .toUpperCase();
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 export function NavUser() {
+  const router = useRouter();
   const { isMobile } = useSidebar();
   const user = useAuthStore((s) => s.user);
   const { mutate: logout, isPending } = useLogout();
@@ -47,41 +49,53 @@ export function NavUser() {
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <SidebarMenuButton size="lg" className="aria-expanded:bg-muted" />
+              <SidebarMenuButton
+                size="lg"
+                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground hover:bg-accent/60 transition-colors"
+              />
             }
           >
-            <Avatar className="size-8 rounded-lg">
-              <AvatarImage src={user.avatarUrl ?? ""} alt={user.fullName} />
-              <AvatarFallback className="rounded-lg text-xs">
+            <Avatar className="h-8 w-8 rounded-full border border-blue-500/20 shrink-0">
+              <AvatarImage
+                src={user.avatarUrl ?? undefined}
+                alt={user.fullName}
+              />
+              <AvatarFallback className="rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs">
                 {getInitials(user.fullName)}
               </AvatarFallback>
             </Avatar>
-            <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-medium">{user.fullName}</span>
+            <div className="grid flex-1 text-left text-sm leading-tight ml-1 group-data-[collapsible=icon]:hidden">
+              <span className="truncate font-semibold text-foreground">
+                {user.fullName}
+              </span>
               <span className="truncate text-xs text-muted-foreground">
                 {user.email}
               </span>
             </div>
-            <ChevronsUpDownIcon className="ml-auto size-4" />
+            <ChevronsUpDownIcon className="ml-auto size-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
           </DropdownMenuTrigger>
 
           <DropdownMenuContent
-            className="w-56"
+            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
             side={isMobile ? "bottom" : "right"}
             align="end"
             sideOffset={4}
           >
-            {/* User info */}
             <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-2 py-2">
-                <Avatar className="size-8 rounded-lg">
-                  <AvatarImage src={user.avatarUrl ?? ""} alt={user.fullName} />
-                  <AvatarFallback className="rounded-lg text-xs">
+              <div className="flex items-center gap-2.5 px-2 py-2 text-left text-sm">
+                <Avatar className="h-9 w-9 rounded-full border border-blue-500/20">
+                  <AvatarImage
+                    src={user.avatarUrl ?? undefined}
+                    alt={user.fullName}
+                  />
+                  <AvatarFallback className="rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold text-xs">
                     {getInitials(user.fullName)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.fullName}</span>
+                  <span className="truncate font-semibold text-foreground">
+                    {user.fullName}
+                  </span>
                   <span className="truncate text-xs text-muted-foreground">
                     {user.email}
                   </span>
@@ -89,13 +103,11 @@ export function NavUser() {
               </div>
             </DropdownMenuLabel>
 
-            {/* Role badge */}
             {user.systemRole === "SUPER_ADMIN" && (
               <>
                 <DropdownMenuSeparator />
-                <div className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground">
-                  <ShieldCheckIcon className="size-3" />
-                  <span>Super Admin</span>
+                <div className="px-2 py-1.5 text-xs text-cyan-600 dark:text-cyan-400 font-medium flex items-center gap-1.5">
+                  <ShieldCheckIcon className="size-3.5" /> Super Admin
                 </div>
               </>
             )}
@@ -103,7 +115,10 @@ export function NavUser() {
             <DropdownMenuSeparator />
 
             <DropdownMenuGroup>
-              <DropdownMenuItem render={<a href="/profile" />}>
+              <DropdownMenuItem
+                onClick={() => router.push("/profile")}
+                className="cursor-pointer"
+              >
                 <UserIcon className="size-4" />
                 Tài khoản
               </DropdownMenuItem>

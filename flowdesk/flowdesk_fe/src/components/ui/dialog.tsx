@@ -49,7 +49,7 @@ export function DialogContent({
   return (
     <div
       className={cn(
-        "relative rounded-xl border bg-card shadow-lg p-6",
+        "relative rounded-lg border bg-card shadow-lg p-6",
         className,
       )}
     >
@@ -66,18 +66,50 @@ export function DialogContent({
   );
 }
 
-export function DialogHeader({ children }: { children: React.ReactNode }) {
-  return <div className="mb-4 space-y-1">{children}</div>;
+export function DialogHeader({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return <div className={cn("mb-4 space-y-1", className)}>{children}</div>;
 }
 
-export function DialogTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-base font-semibold">{children}</h2>;
+export function DialogTitle({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <h2 className={cn("text-base font-semibold", className)}>{children}</h2>
+  );
 }
 
-export function DialogDescription({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-muted-foreground">{children}</p>;
+export function DialogDescription({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <p className={cn("text-sm text-muted-foreground", className)}>{children}</p>
+  );
 }
 
-export function DialogFooter({ children }: { children: React.ReactNode }) {
-  return <div className="mt-6 flex justify-end gap-2">{children}</div>;
+export function DialogFooter({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={cn("mt-6 flex justify-end gap-2", className)}>
+      {children}
+    </div>
+  );
 }

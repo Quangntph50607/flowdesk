@@ -23,14 +23,14 @@ interface PageHeaderProps {
 
 export function PageHeader({ crumbs = [], title }: PageHeaderProps) {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-      <SidebarTrigger className="-ml-1" />
+    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b border-border/60 bg-background/85 backdrop-blur-md px-4 sm:px-6 transition-all">
+      <SidebarTrigger className="-ml-1 rounded-lg hover:bg-muted/80 transition-colors" />
       <Separator
         orientation="vertical"
-        className="mr-2 data-vertical:h-4 data-vertical:self-auto"
+        className="mr-2 h-4 self-center bg-border/80"
       />
       <Breadcrumb>
-        <BreadcrumbList>
+        <BreadcrumbList className="text-xs sm:text-sm font-medium">
           {crumbs.map((crumb, i) => (
             <span
               key={`${crumb.label}-${i}`}
@@ -38,11 +38,11 @@ export function PageHeader({ crumbs = [], title }: PageHeaderProps) {
             >
               <BreadcrumbItem>
                 {crumb.href ? (
-                  <BreadcrumbLink href={crumb.href}>
+                  <BreadcrumbLink href={crumb.href} className="text-muted-foreground hover:text-foreground transition-colors">
                     {crumb.label}
                   </BreadcrumbLink>
                 ) : (
-                  <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                  <BreadcrumbPage className="text-muted-foreground">{crumb.label}</BreadcrumbPage>
                 )}
               </BreadcrumbItem>
               {i < crumbs.length - 1 && <BreadcrumbSeparator />}
@@ -52,7 +52,7 @@ export function PageHeader({ crumbs = [], title }: PageHeaderProps) {
             <>
               {crumbs.length > 0 && <BreadcrumbSeparator />}
               <BreadcrumbItem>
-                <BreadcrumbPage>{title}</BreadcrumbPage>
+                <BreadcrumbPage className="font-semibold text-foreground">{title}</BreadcrumbPage>
               </BreadcrumbItem>
             </>
           )}
@@ -61,3 +61,4 @@ export function PageHeader({ crumbs = [], title }: PageHeaderProps) {
     </header>
   );
 }
+
