@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/page-header";
 import { workspaceService } from "@/services/workspace.service";
-import { userService } from "@/services/user.service";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +37,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import type { WorkspaceMember } from "@/types";
+import { AddMemberDialog } from "@/components/workspace/add-member-dialog";
 
 function getInitials(name: string) {
   return name
@@ -46,163 +46,6 @@ function getInitials(name: string) {
     .slice(0, 2)
     .join("")
     .toUpperCase();
-}
-
-// ── Dialog thêm thành viên ────────────────────────────────────
-function AddMemberDialog({
-  open,
-  onClose,
-  workspaceId,
-  workspaceLevel,
-}: {
-  open: boolean;
-  onClose: () => void;
-  workspaceId: number;
-  workspaceLevel: number;
-}) {
-  const queryClient = useQueryClient();
-  const [userId, setUserId] = useState("");
-  const [roleCode, setRoleCode] = useState<"ADMIN" | "AGENT">(
-    workspaceLevel === 0 ? "ADMIN" : "AGENT",
-  );
-  const [error, setError] = useState("");
-
-  const availableRoles = workspaceLevel === 0 ? ["ADMIN"] : ["AGENT"];
-
-  const { data: users = [] } = useQuery({
-    queryKey: ["admin", "users"],
-    queryFn: userService.getAll,
-  });
-
-  const addMutation = useMutation({
-    mutationFn: () =>
-      workspaceService.addMember(workspaceId, {
-        userId: Number(userId),
-        roleCode,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["workspace-members", workspaceId],
-      });
-      onClose();
-      setUserId("");
-      setError("");
-    },
-    onError: (err: { response?: { data?: { message?: string } } }) =>
-      setError(err?.response?.data?.message ?? "Đã có lỗi xảy ra"),
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    if (!userId) {
-      setError("Vui lòng chọn người dùng");
-      return;
-    }
-    addMutation.mutate();
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose}>
-      <DialogContent onClose={onClose} className="sm:max-w-md rounded-lg p-6">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <DialogHeader>
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                <UserPlusIcon className="size-5" />
-              </div>
-              <div>
-                <DialogTitle className="text-lg font-bold">
-                  Thêm thành viên
-                </DialogTitle>
-                <p className="text-xs text-muted-foreground">
-                  Gán tài khoản vào không gian làm việc này
-                </p>
-              </div>
-            </div>
-          </DialogHeader>
-
-          <div className="space-y-4 pt-1">
-            <div className="space-y-1.5">
-              <Label
-                htmlFor="user-select"
-                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
-              >
-                Chọn người dùng
-              </Label>
-              <select
-                id="user-select"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                className="w-full h-11 rounded-lg border border-border/80 bg-card px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              >
-                <option value="">-- Chọn tài khoản khả dụng --</option>
-                {users
-                  .filter((u) => !u.systemRole)
-                  .map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.fullName} ({u.email})
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Vai trò trong workspace
-              </Label>
-              <div className="flex gap-2">
-                {availableRoles.map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setRoleCode(r as "ADMIN" | "AGENT")}
-                    className={`flex-1 rounded-lg border px-3 py-2.5 text-xs font-semibold transition-all ${
-                      roleCode === r
-                        ? "border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 shadow-sm"
-                        : "bg-card hover:bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {r === "ADMIN"
-                      ? "Admin (Quản trị viên)"
-                      : "Agent (Nhân viên hỗ trợ)"}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                {workspaceLevel === 0
-                  ? "Workspace cấp công ty tiếp nhận quyền Admin"
-                  : "Chi nhánh tiếp nhận quyền Agent"}
-              </p>
-            </div>
-
-            {error && (
-              <p className="text-xs text-destructive font-medium">{error}</p>
-            )}
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={addMutation.isPending}
-              className="rounded-lg h-10"
-            >
-              Huỷ
-            </Button>
-            <Button
-              type="submit"
-              disabled={addMutation.isPending}
-              className="rounded-lg h-10 bg-blue-600 hover:bg-blue-500 text-white font-medium"
-            >
-              {addMutation.isPending ? "Đang thêm..." : "Thêm thành viên"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 // ── Dialog sửa thành viên ─────────────────────────────────────
@@ -625,6 +468,8 @@ export default function MembersPage() {
           onClose={() => setAddOpen(false)}
           workspaceId={workspaceId}
           workspaceLevel={workspace.level}
+          queryKey={["workspace-members", workspaceId]}
+          canSearch={true}
         />
       )}
 

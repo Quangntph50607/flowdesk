@@ -48,7 +48,16 @@ public class WorkspaceServiceImpl implements WorkspaceService {
   public List<WorkspaceResponse> getAllWorkspaces() {
     return workspaceRepository.findAllByLevelAndIsActiveTrue(0)
         .stream()
-        .map(WorkspaceResponse::from)
+        .map(ws -> {
+          WorkspaceResponse response = WorkspaceResponse.from(ws);
+          List<WorkspaceResponse> children = workspaceRepository
+              .findAllByParentIdAndIsActiveTrue(ws.getId())
+              .stream()
+              .map(WorkspaceResponse::from)
+              .toList();
+          response.setChildren(children);
+          return response;
+        })
         .toList();
   }
 

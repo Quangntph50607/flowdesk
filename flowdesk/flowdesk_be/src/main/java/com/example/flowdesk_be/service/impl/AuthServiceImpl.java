@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -125,6 +126,18 @@ public class AuthServiceImpl implements AuthService {
 
     refreshTokenRepository.save(refreshToken);
 
+    // Lấy danh sách workspace membership của user
+    List<AuthResponse.WorkspaceInfo> workspaces = user.getWorkspaceMemberships()
+        .stream()
+        .filter(m -> m.getIsActive())
+        .map(m -> new AuthResponse.WorkspaceInfo(
+            m.getWorkspace().getId(),
+            m.getWorkspace().getName(),
+            m.getWorkspace().getSlug(),
+            m.getWorkspace().getParent() != null ? m.getWorkspace().getParent().getId() : null,
+            m.getRole().getCode()))
+        .toList();
+
     return new AuthResponse(
         accessToken,
         rawRefreshToken,
@@ -133,6 +146,7 @@ public class AuthServiceImpl implements AuthService {
         user.getEmail(),
         user.getFullName(),
         user.getAvatarUrl(),
-        user.getSystemRole());
+        user.getSystemRole(),
+        workspaces);
   }
 }

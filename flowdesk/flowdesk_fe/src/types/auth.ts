@@ -22,6 +22,15 @@ export interface AuthResponse {
   fullName: string;
   avatarUrl?: string | null;
   systemRole: "SUPER_ADMIN" | null;
+  workspaces: WorkspaceInfo[];
+}
+
+export interface WorkspaceInfo {
+  workspaceId: number;
+  workspaceName: string;
+  workspaceSlug: string;
+  parentId: number | null; // null = workspace cha
+  roleCode: "ADMIN" | "AGENT";
 }
 
 export interface ApiResponse<T> {

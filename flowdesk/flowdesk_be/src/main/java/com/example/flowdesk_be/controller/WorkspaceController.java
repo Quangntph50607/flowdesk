@@ -85,6 +85,15 @@ public class WorkspaceController {
   // ================================================================
 
   @Tag(name = "Workspace - Branches", description = "Quản lý chi nhánh — SUPER_ADMIN và ADMIN")
+  @Operation(summary = "Lấy chi tiết workspace (kèm chi nhánh) — dành cho ADMIN")
+  @GetMapping("/api/workspace/{workspaceId}")
+  public ResponseEntity<ApiResponse<WorkspaceResponse>> getWorkspaceForMember(
+      @Parameter(description = "ID workspace") @PathVariable Long workspaceId) {
+    return ResponseEntity.ok(
+        ApiResponse.success(200, "OK", workspaceService.getWorkspaceById(workspaceId)));
+  }
+
+  @Tag(name = "Workspace - Branches", description = "Quản lý chi nhánh — SUPER_ADMIN và ADMIN")
   @Operation(summary = "Tạo chi nhánh mới trong workspace")
   @PostMapping("/api/workspace/{workspaceId}/branches")
   public ResponseEntity<ApiResponse<WorkspaceResponse>> createBranch(

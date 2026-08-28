@@ -129,7 +129,7 @@ export function NavUser() {
             <DropdownMenuItem
               variant="destructive"
               disabled={isPending}
-              onSelect={() => logout()}
+              onClick={() => logout()}
             >
               <LogOutIcon className="size-4" />
               {isPending ? "Đang đăng xuất..." : "Đăng xuất"}

@@ -71,6 +71,7 @@ public class MemberServiceImpl implements MemberService {
   }
 
   @Override
+  @Transactional(readOnly = true)
   public List<MemberResponse> getMembers(Long workspaceId, String requesterEmail) {
     findWorkspaceOrThrow(workspaceId);
     User requester = findUserOrThrow(requesterEmail);
@@ -136,10 +137,26 @@ public class MemberServiceImpl implements MemberService {
     return member;
   }
 
-  // ADMIN phải là member active của workspace đó với role ADMIN
+  // ADMIN phải là member active của workspace đó với role ADMIN.
+  // Nếu workspace là chi nhánh (level=1), kiểm tra quyền trên workspace cha.
   private void assertAdminOfWorkspace(User requester, Long workspaceId) {
+    Workspace workspace = findWorkspaceOrThrow(workspaceId);
+
+    // Xác định workspace cần kiểm tra quyền:
+    // - level 0 (workspace cha): kiểm tra trực tiếp
+    // - level 1 (chi nhánh): kiểm tra trên workspace cha
+    Long checkWorkspaceId;
+    if (workspace.getLevel() == 1) {
+      if (workspace.getParent() == null) {
+        throw AppException.forbidden("Bạn không có quyền trên workspace này");
+      }
+      checkWorkspaceId = workspace.getParent().getId();
+    } else {
+      checkWorkspaceId = workspaceId;
+    }
+
     WorkspaceMember membership = memberRepository
-        .findByWorkspaceIdAndUserId(workspaceId, requester.getId())
+        .findByWorkspaceIdAndUserId(checkWorkspaceId, requester.getId())
         .orElseThrow(() -> AppException.forbidden("Bạn không có quyền trên workspace này"));
 
     if (!"ADMIN".equals(membership.getRole().getCode()) || !membership.getIsActive()) {

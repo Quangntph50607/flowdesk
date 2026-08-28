@@ -126,7 +126,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick actions & Overview Cards */}
-        <div className="grid gap-6 lg:grid-cols-3">
+        {/* <div className="grid gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-4">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Thao tác nhanh
@@ -165,10 +165,10 @@ export default function DashboardPage() {
                 bg="bg-amber-500/10 border-amber-500/20"
               />
             </div>
-          </div>
+          </div> */}
 
           {/* Quick System Info Panel */}
-          <div className="space-y-4">
+          {/* <div className="space-y-4">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Thông tin phiên
             </h2>
@@ -209,7 +209,7 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
-        </div>
+        </div> */}
       </div>
     </div>
   );

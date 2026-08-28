@@ -20,7 +20,7 @@ export function middleware(request: NextRequest) {
 
   // Đã đăng nhập → không vào lại trang login/register
   if (isLoggedIn && isPublicRoute) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+    return NextResponse.redirect(new URL("/welcome", request.url));
   }
 
   return NextResponse.next();

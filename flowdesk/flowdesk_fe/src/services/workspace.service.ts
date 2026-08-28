@@ -48,6 +48,14 @@ export const workspaceService = {
   },
 
   // ── Branch (chi nhánh) ──
+  // Lấy workspace theo ID — dành cho ADMIN (không cần quyền /admin/)
+  getByIdForMember: async (id: number): Promise<Workspace> => {
+    const { data } = await apiClient.get<ApiResponse<Workspace>>(
+      `/api/workspace/${id}`,
+    );
+    return data.data;
+  },
+
   getBranches: async (workspaceId: number): Promise<Workspace[]> => {
     const { data } = await apiClient.get<ApiResponse<Workspace[]>>(
       `/api/workspace/${workspaceId}/branches`,
