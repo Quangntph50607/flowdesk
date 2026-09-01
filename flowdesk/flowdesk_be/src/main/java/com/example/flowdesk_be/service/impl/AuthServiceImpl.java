@@ -6,6 +6,7 @@ import com.example.flowdesk_be.dto.request.RegisterRequest;
 import com.example.flowdesk_be.dto.response.AuthResponse;
 import com.example.flowdesk_be.entity.RefreshToken;
 import com.example.flowdesk_be.entity.User;
+import com.example.flowdesk_be.exception.AppException;
 import com.example.flowdesk_be.repository.RefreshTokenRepository;
 import com.example.flowdesk_be.repository.UserRepository;
 import com.example.flowdesk_be.security.JwtUtil;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -37,7 +39,7 @@ public class AuthServiceImpl implements AuthService {
   @Transactional
   public AuthResponse register(RegisterRequest request) {
     if (userRepository.existsByEmail(request.getEmail())) {
-      throw new RuntimeException("Email đã được sử dụng");
+      throw AppException.conflict("Email đã được sử dụng");
     }
 
     User user = User.builder()
@@ -125,12 +127,27 @@ public class AuthServiceImpl implements AuthService {
 
     refreshTokenRepository.save(refreshToken);
 
+    // Workspace memberships của user (active)
+    List<AuthResponse.WorkspaceInfo> workspaces = user.getWorkspaceMemberships()
+        .stream()
+        .filter(m -> m.getIsActive())
+        .map(m -> new AuthResponse.WorkspaceInfo(
+            m.getWorkspace().getId(),
+            m.getWorkspace().getName(),
+            m.getWorkspace().getSlug(),
+            m.getWorkspace().getParent() != null ? m.getWorkspace().getParent().getId() : null,
+            m.getRole().getCode()))
+        .toList();
+
     return new AuthResponse(
         accessToken,
         rawRefreshToken,
         "Bearer",
         user.getId(),
         user.getEmail(),
-        user.getFullName());
+        user.getFullName(),
+        user.getAvatarUrl(),
+        user.getSystemRole(),
+        workspaces);
   }
 }

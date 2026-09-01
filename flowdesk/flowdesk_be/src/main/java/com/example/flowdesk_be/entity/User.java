@@ -7,6 +7,8 @@ import lombok.*;
 import org.hibernate.annotations.Nationalized;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -45,6 +47,12 @@ public class User {
   @Column(name = "avatar_url", length = 500)
   private String avatarUrl;
 
+  // 'SUPER_ADMIN' hoặc NULL
+  @Size(max = 50)
+  @Column(name = "system_role", length = 50)
+  private String systemRole;
+
+  @Builder.Default
   @NotNull
   @Column(name = "is_active", nullable = false)
   private Boolean isActive = true;
@@ -55,6 +63,10 @@ public class User {
   @Column(name = "updated_at", nullable = false)
   private LocalDateTime updatedAt;
 
+  @Builder.Default
+  @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+  private List<WorkspaceMember> workspaceMemberships = new ArrayList<>();
+
   @PrePersist
   protected void onCreate() {
     createdAt = LocalDateTime.now();
@@ -64,5 +76,9 @@ public class User {
   @PreUpdate
   protected void onUpdate() {
     updatedAt = LocalDateTime.now();
+  }
+
+  public boolean isSuperAdmin() {
+    return "SUPER_ADMIN".equals(systemRole);
   }
 }
