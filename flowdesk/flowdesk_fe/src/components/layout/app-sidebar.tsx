@@ -81,12 +81,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         slug: w.workspaceSlug,
       })) ?? [];
 
+  const homeUrl = isSuperAdmin
+    ? "/dashboard"
+    : ownerAdminWorkspace
+      ? "/admin-workspace"
+      : agentBranches.length > 0
+        ? `/agent/branch/${agentBranches[0].id}`
+        : "/welcome";
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" render={<Link href="/" />}>
+            <SidebarMenuButton size="lg" render={<Link href={homeUrl} />}>
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
                 F
               </div>
