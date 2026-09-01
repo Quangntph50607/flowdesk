@@ -1,8 +1,9 @@
-// TODO: Dashboard layout — sidebar + header
+import { DashboardShell } from "@/components/layout/dashboard-shell";
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return <DashboardShell>{children}</DashboardShell>;
 }

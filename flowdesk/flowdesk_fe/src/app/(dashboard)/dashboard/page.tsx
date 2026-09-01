@@ -1,55 +1,89 @@
-import { AppSidebar } from "@/components/layout/app-sidebar";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+"use client";
+
+import { useAuthStore } from "@/store/auth.store";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { UsersIcon, BuildingIcon, ActivityIcon } from "lucide-react";
 
 export default function DashboardPage() {
+  const { user, isAuthenticated } = useAuthStore();
+  const router = useRouter();
+
+  useEffect(() => {
+    // Chờ zustand hydrate xong (user vẫn null nghĩa là chưa hydrate)
+    if (user === null) return;
+
+    if (!isAuthenticated()) {
+      router.replace("/login");
+      return;
+    }
+    if (user.systemRole === "SUPER_ADMIN") return;
+
+    const isOwnerOrAdmin = user.workspaces?.some(
+      (w) =>
+        (w.roleCode === "OWNER" || w.roleCode === "ADMIN") &&
+        w.parentId === null,
+    );
+    if (isOwnerOrAdmin) {
+      router.replace("/admin-workspace");
+      return;
+    }
+
+    const isAgent = user.workspaces?.some((w) => w.roleCode === "AGENT");
+    if (isAgent) {
+      router.replace("/agent");
+      return;
+    }
+
+    router.replace("/welcome");
+  }, [user, isAuthenticated, router]);
+
+  if (!user || user.systemRole !== "SUPER_ADMIN") return null;
+
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator
-              orientation="vertical"
-              className="mr-2 data-vertical:h-4 data-vertical:self-auto"
-            />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="#">
-                    Build Your Application
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>Data Fetching</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-        </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-            <div className="aspect-video rounded-xl bg-muted/50" />
-            <div className="aspect-video rounded-xl bg-muted/50" />
-            <div className="aspect-video rounded-xl bg-muted/50" />
-          </div>
-          <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min" />
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">
+          Tổng quan hệ thống
+        </h1>
+        <p className="text-muted-foreground">Xin chào, {user?.fullName}</p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Người dùng</CardTitle>
+            <UsersIcon className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">—</div>
+            <p className="text-xs text-muted-foreground">Tổng số tài khoản</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Workspace</CardTitle>
+            <BuildingIcon className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">—</div>
+            <p className="text-xs text-muted-foreground">Tổng số workspace</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Hoạt động</CardTitle>
+            <ActivityIcon className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">—</div>
+            <p className="text-xs text-muted-foreground">Trong 24 giờ qua</p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }

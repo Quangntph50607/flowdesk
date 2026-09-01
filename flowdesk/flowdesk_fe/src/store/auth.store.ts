@@ -6,7 +6,6 @@ interface AuthState {
   user: User | null;
   accessToken: string | null;
   refreshToken: string | null;
-
   setTokens: (accessToken: string, refreshToken: string) => void;
   setUser: (user: User) => void;
   clearAuth: () => void;
@@ -19,21 +18,22 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       accessToken: null,
       refreshToken: null,
-
       setTokens: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
-
       setUser: (user) => set({ user }),
-
       clearAuth: () =>
         set({ user: null, accessToken: null, refreshToken: null }),
-
-      isAuthenticated: () => !!get().accessToken,
+      // Dùng user (persisted) thay vì accessToken để check auth sau khi reload
+      isAuthenticated: () => !!get().user,
     }),
     {
       name: "flowdesk-auth",
-      // Chỉ persist refreshToken — accessToken lưu in-memory
-      partialize: (state) => ({ refreshToken: state.refreshToken }),
+      // Persist cả 3 — accessToken cần để axios interceptor dùng ngay sau reload
+      partialize: (state) => ({
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+        user: state.user,
+      }),
     },
   ),
 );

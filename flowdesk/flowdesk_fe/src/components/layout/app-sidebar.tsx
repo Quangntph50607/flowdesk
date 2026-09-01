@@ -1,117 +1,173 @@
 "use client";
 
 import * as React from "react";
-import { NavMain } from "@/components/layout/nav-main";
-import { NavProjects } from "@/components/layout/nav-projects";
-import { NavUser } from "@/components/layout/nav-user";
-import { TeamSwitcher } from "@/components/layout/team-switcher";
+import Link from "next/link";
+import {
+  LayoutDashboardIcon,
+  UsersIcon,
+  BuildingIcon,
+  GitBranchIcon,
+  UserCogIcon,
+} from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
   SidebarRail,
+  SidebarGroup,
+  SidebarGroupLabel,
 } from "@/components/ui/sidebar";
-import {
-  GalleryVerticalEndIcon,
-  AudioLinesIcon,
-  TerminalIcon,
-  TerminalSquareIcon,
-  BotIcon,
-  BookOpenIcon,
-  Settings2Icon,
-  FrameIcon,
-  PieChartIcon,
-  MapIcon,
-} from "lucide-react";
+import { NavUser } from "./nav-user";
+import { useAuthStore } from "@/store/auth.store";
 
-const data = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
-  teams: [
+function getSuperAdminNav() {
+  return [
     {
-      name: "Acme Inc",
-      logo: <GalleryVerticalEndIcon />,
-      plan: "Enterprise",
+      title: "Tổng quan",
+      url: "/dashboard",
+      icon: LayoutDashboardIcon,
     },
     {
-      name: "Acme Corp.",
-      logo: <AudioLinesIcon />,
-      plan: "Startup",
+      title: "Người dùng",
+      url: "/dashboard/users",
+      icon: UsersIcon,
     },
     {
-      name: "Evil Corp.",
-      logo: <TerminalIcon />,
-      plan: "Free",
+      title: "Workspace",
+      url: "/dashboard/workspaces",
+      icon: BuildingIcon,
     },
-  ],
-  navMain: [
+  ];
+}
+
+function getOwnerAdminNav() {
+  return [
     {
-      title: "Playground",
-      url: "#",
-      icon: <TerminalSquareIcon />,
-      isActive: true,
-      items: [
-        { title: "History", url: "#" },
-        { title: "Starred", url: "#" },
-        { title: "Settings", url: "#" },
-      ],
+      title: "Tổng quan",
+      url: "/admin-workspace",
+      icon: LayoutDashboardIcon,
     },
     {
-      title: "Models",
-      url: "#",
-      icon: <BotIcon />,
-      items: [
-        { title: "Genesis", url: "#" },
-        { title: "Explorer", url: "#" },
-        { title: "Quantum", url: "#" },
-      ],
+      title: "Chi nhánh",
+      url: "/admin-workspace/branches",
+      icon: GitBranchIcon,
     },
     {
-      title: "Documentation",
-      url: "#",
-      icon: <BookOpenIcon />,
-      items: [
-        { title: "Introduction", url: "#" },
-        { title: "Get Started", url: "#" },
-        { title: "Tutorials", url: "#" },
-        { title: "Changelog", url: "#" },
-      ],
+      title: "Thành viên",
+      url: "/admin-workspace/members",
+      icon: UserCogIcon,
     },
-    {
-      title: "Settings",
-      url: "#",
-      icon: <Settings2Icon />,
-      items: [
-        { title: "General", url: "#" },
-        { title: "Team", url: "#" },
-        { title: "Billing", url: "#" },
-        { title: "Limits", url: "#" },
-      ],
-    },
-  ],
-  projects: [
-    { name: "Design Engineering", url: "#", icon: <FrameIcon /> },
-    { name: "Sales & Marketing", url: "#", icon: <PieChartIcon /> },
-    { name: "Travel", url: "#", icon: <MapIcon /> },
-  ],
-};
+  ];
+}
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const { user } = useAuthStore();
+
+  const isSuperAdmin = user?.systemRole === "SUPER_ADMIN";
+  const ownerAdminWorkspace = user?.workspaces?.find(
+    (w) =>
+      (w.roleCode === "OWNER" || w.roleCode === "ADMIN") && w.parentId === null,
+  );
+  const agentBranches =
+    user?.workspaces
+      ?.filter((w) => w.roleCode === "AGENT")
+      ?.map((w) => ({
+        id: w.workspaceId,
+        name: w.workspaceName,
+        slug: w.workspaceSlug,
+      })) ?? [];
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" render={<Link href="/" />}>
+              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
+                F
+              </div>
+              <div className="flex flex-col gap-0.5 leading-none">
+                <span className="font-semibold">FlowDesk</span>
+                <span className="text-xs text-muted-foreground">
+                  {isSuperAdmin
+                    ? "Super Admin"
+                    : ownerAdminWorkspace
+                      ? ownerAdminWorkspace.workspaceName
+                      : "Agent"}
+                </span>
+              </div>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
+
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        {/* SUPER_ADMIN nav */}
+        {isSuperAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Quản trị hệ thống</SidebarGroupLabel>
+            <SidebarMenu>
+              {getSuperAdminNav().map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton render={<Link href={item.url} />}>
+                    <item.icon />
+                    <span>{item.title}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
+
+        {/* OWNER/ADMIN nav */}
+        {!isSuperAdmin && ownerAdminWorkspace && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+            <SidebarMenu>
+              {getOwnerAdminNav().map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton render={<Link href={item.url} />}>
+                    <item.icon />
+                    <span>{item.title}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
+
+        {/* AGENT nav */}
+        {!isSuperAdmin && !ownerAdminWorkspace && agentBranches.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Chi nhánh của tôi</SidebarGroupLabel>
+            <SidebarMenu>
+              {agentBranches.map((branch) => (
+                <SidebarMenuItem key={branch.id}>
+                  <SidebarMenuButton
+                    render={<Link href={`/agent/branch/${branch.id}`} />}
+                  >
+                    <GitBranchIcon />
+                    <span>{branch.name}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
       </SidebarContent>
+
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser
+          user={{
+            name: user?.fullName ?? "Unknown",
+            email: user?.email ?? "",
+            avatar: user?.avatarUrl ?? "",
+          }}
+        />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
