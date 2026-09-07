@@ -1,7 +1,7 @@
 /**
  * Format date sang dạng dd/MM/yyyy HH:mm
  */
-export function formatDate(dateStr?: string): string {
+export function formatDateTime(dateStr?: string): string {
   if (!dateStr) return "—";
   return new Intl.DateTimeFormat("vi-VN", {
     day: "2-digit",

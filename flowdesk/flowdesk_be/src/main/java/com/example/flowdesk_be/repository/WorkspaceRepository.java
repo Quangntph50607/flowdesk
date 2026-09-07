@@ -17,4 +17,6 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long> {
   List<Workspace> findAllByParentIdAndIsActiveTrue(Long parentId);
 
   List<Workspace> findByLevelAndIsActiveTrueAndNameContainingIgnoreCase(Integer level, String name);
+
+  List<Workspace> findByParentIdAndIsActiveTrueAndNameContainingIgnoreCase(Long parentId, String name);
 }

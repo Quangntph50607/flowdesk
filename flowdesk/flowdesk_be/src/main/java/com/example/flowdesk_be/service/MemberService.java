@@ -11,6 +11,8 @@ public interface MemberService {
 
   List<MemberResponse> getMembers(Long workspaceId, String requesterEmail);
 
+  List<MemberResponse> getMembers(Long workspaceId, String requesterEmail, String search);
+
   MemberResponse toggleMemberActive(Long workspaceId, Long memberId, String requesterEmail);
 
   void removeMember(Long workspaceId, Long memberId, String requesterEmail);

@@ -1,5 +1,5 @@
-import { definePreset } from "@primeuix/themes";
-import Aura from "@primeuix/themes/aura";
+import { definePreset } from "@primevue/themes";
+import Aura from "@primevue/themes/aura";
 
 const FlowdeskPreset = definePreset(Aura, {
   semantic: {
@@ -69,9 +69,14 @@ export default defineNuxtConfig({
 
   modules: ["@nuxtjs/tailwindcss", "@primevue/nuxt-module", "@pinia/nuxt"],
 
+  imports: {
+    dirs: ["utils/**"],
+  },
+
   primevue: {
     options: {
       ripple: true,
+      unstyled: false,
       theme: {
         preset: FlowdeskPreset,
         options: {
@@ -81,6 +86,7 @@ export default defineNuxtConfig({
         },
       },
     },
+    autoImport: true,
   },
 
   css: ["primeicons/primeicons.css", "~/assets/css/main.css"],
@@ -88,6 +94,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBase: process.env.NUXT_PUBLIC_API_BASE || "http://localhost:8080",
+      primeuiLicenseKey: process.env.NUXT_PUBLIC_PRIMEUI_LICENSE || "",
     },
   },
 });

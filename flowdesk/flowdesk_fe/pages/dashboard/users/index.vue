@@ -22,7 +22,7 @@
       </template>
       <template #content>
         <DataTable
-          :value="filteredUsers"
+          :value="users"
           :loading="loading"
           paginator
           :rows="10"
@@ -31,25 +31,22 @@
         >
           <Column field="fullName" header="Họ tên" sortable />
           <Column field="email" header="Email" sortable />
-          <Column field="role" header="Vai trò" style="width: 130px">
+          <Column field="updatedAt" header="Cập nhật" style="width: 130px">
             <template #body="{ data }">
-              <Tag
-                :value="data.role"
-                :severity="data.role === 'SUPER_ADMIN' ? 'warn' : 'info'"
-              />
+              {{ formatDateTime(data.updatedAt) }}
             </template>
           </Column>
           <Column field="active" header="Trạng thái" style="width: 120px">
             <template #body="{ data }">
               <Tag
-                :value="data.active ? 'Hoạt động' : 'Tắt'"
-                :severity="data.active ? 'success' : 'secondary'"
+                :value="data.active ? 'Ngưng hoạt động' : 'Hoạt động'"
+                :severity="data.active ? 'danger' : 'success'"
               />
             </template>
           </Column>
           <Column header="Hành động" style="width: 100px">
             <template #body="{ data }">
-              <div class="flex gap-1">
+              <div class="flex items-center gap-1">
                 <Button
                   icon="pi pi-pencil"
                   text
@@ -59,14 +56,9 @@
                   v-tooltip.top="'Chỉnh sửa'"
                   @click="openEdit(data)"
                 />
-                <Button
-                  :icon="data.active ? 'pi pi-ban' : 'pi pi-check'"
-                  text
-                  rounded
-                  size="small"
-                  :severity="data.active ? 'danger' : 'success'"
-                  v-tooltip.top="data.active ? 'Vô hiệu hóa' : 'Kích hoạt'"
-                  @click="toggleUser(data)"
+                <ToggleSwitch
+                  :model-value="!data.active"
+                  @update:model-value="toggleUser(data)"
                 />
               </div>
             </template>
@@ -134,21 +126,14 @@ const showEdit = ref(false);
 const submitting = ref(false);
 const editingUser = ref<any>(null);
 const editForm = reactive({ fullName: "", email: "" });
-
-const filteredUsers = computed(() => {
-  if (!search.value) return users.value;
-  const q = search.value.toLowerCase();
-  return users.value.filter(
-    (u) =>
-      u.fullName?.toLowerCase().includes(q) ||
-      u.email?.toLowerCase().includes(q),
-  );
-});
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function fetchUsers() {
   loading.value = true;
   try {
-    const res = await api.get("/api/admin/users");
+    const res = await api.get("/api/admin/users", {
+      params: { search: search.value.trim() || undefined },
+    });
     users.value = res.data.data ?? [];
   } catch {
     toast.add({
@@ -161,6 +146,11 @@ async function fetchUsers() {
     loading.value = false;
   }
 }
+
+watch(search, () => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(fetchUsers, 1000);
+});
 
 function openEdit(user: any) {
   editingUser.value = user;
@@ -201,7 +191,7 @@ async function toggleUser(user: any) {
     toast.add({
       severity: "success",
       summary: "Thành công",
-      detail: `${user.active ? "Đã vô hiệu hóa" : "Đã kích hoạt"} tài khoản`,
+      detail: `Cập nhật trạng thái tài khoản thành công`,
       life: 3000,
     });
     fetchUsers();

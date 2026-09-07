@@ -115,10 +115,11 @@ public class WorkspaceController {
   @Operation(summary = "Danh sách chi nhánh của workspace tổng")
   @GetMapping("/api/workspaces/{workspaceId}/branches")
   public ResponseEntity<ApiResponse<List<WorkspaceResponse>>> getBranches(
-      @PathVariable Long workspaceId) {
+      @PathVariable Long workspaceId,
+      @RequestParam(required = false) String search) {
 
     return ResponseEntity.ok(
-        ApiResponse.success(200, "OK", workspaceService.getBranches(workspaceId)));
+        ApiResponse.success(200, "OK", workspaceService.getBranches(workspaceId, search)));
   }
 
   @Tag(name = "Workspace – Branches")
@@ -167,10 +168,11 @@ public class WorkspaceController {
   @GetMapping("/api/workspaces/{workspaceId}/members")
   public ResponseEntity<ApiResponse<List<MemberResponse>>> getMembers(
       @PathVariable Long workspaceId,
-      @AuthenticationPrincipal UserDetails userDetails) {
+      @AuthenticationPrincipal UserDetails userDetails,
+      @RequestParam(required = false) String search) {
 
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        memberService.getMembers(workspaceId, userDetails.getUsername())));
+        memberService.getMembers(workspaceId, userDetails.getUsername(), search)));
   }
 
   @Tag(name = "Workspace – Members")
