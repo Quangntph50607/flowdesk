@@ -15,6 +15,20 @@
 
     <!-- Table -->
     <Card>
+      <template #header>
+        <div class="px-5 pt-4 pb-0">
+          <InputText
+            v-if="authStore.isSuperAdmin"
+            v-model="search"
+            placeholder="Tìm theo tên workspace..."
+            class="w-full md:w-80"
+          >
+            <template #prefix>
+              <i class="pi pi-search" />
+            </template>
+          </InputText>
+        </div>
+      </template>
       <template #content>
         <DataTable
           :value="workspaces"
@@ -91,6 +105,25 @@
             fluid
           />
         </div>
+        <div class="flex flex-col gap-1" v-if="!editing">
+          <label class="text-sm font-medium"
+            >Slug <span class="text-red-500">*</span></label
+          >
+          <InputText v-model="form.slug" placeholder="ten-workspace" fluid />
+          <span class="text-xs" style="color: #94a3b8"
+            >Tự động tạo từ tên, có thể chỉnh sửa</span
+          >
+        </div>
+        <div class="flex flex-col gap-1" v-if="!editing">
+          <label class="text-sm font-medium"
+            >Email chủ sở hữu (Owner) <span class="text-red-500">*</span></label
+          >
+          <InputText
+            v-model="form.ownerEmail"
+            placeholder="owner@example.com"
+            fluid
+          />
+        </div>
         <div class="flex flex-col gap-1">
           <label class="text-sm font-medium">Mô tả</label>
           <Textarea
@@ -128,17 +161,44 @@ const toast = useToast();
 
 const workspaces = ref<any[]>([]);
 const loading = ref(false);
+const search = ref("");
 const showDialog = ref(false);
 const submitting = ref(false);
 const editing = ref<any>(null);
-const form = reactive({ name: "", description: "" });
+const form = reactive({ name: "", slug: "", description: "", ownerEmail: "" });
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+// Auto-generate slug từ tên workspace
+function toSlug(str: string) {
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "d")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
+watch(
+  () => form.name,
+  (val) => {
+    if (!editing.value) {
+      form.slug = toSlug(val);
+    }
+  },
+);
 
 async function fetchWorkspaces() {
   loading.value = true;
   try {
     if (authStore.isSuperAdmin) {
       // SUPER_ADMIN: lấy toàn bộ workspace qua admin API
-      const res = await api.get("/api/admin/workspaces");
+      const res = await api.get("/api/admin/workspaces", {
+        params: { search: search.value.trim() || undefined },
+      });
       workspaces.value = res.data.data ?? [];
     } else {
       // OWNER/ADMIN/AGENT: lấy workspace của mình từ /api/me
@@ -167,31 +227,47 @@ async function fetchWorkspaces() {
   }
 }
 
+watch(search, () => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(fetchWorkspaces, 1000);
+});
+
 function openCreate() {
   editing.value = null;
   form.name = "";
+  form.slug = "";
   form.description = "";
+  form.ownerEmail = "";
   showDialog.value = true;
 }
 
 function openEdit(ws: any) {
   editing.value = ws;
   form.name = ws.name;
+  form.slug = ws.slug ?? "";
   form.description = ws.description ?? "";
+  form.ownerEmail = "";
   showDialog.value = true;
 }
 
 function closeDialog() {
   showDialog.value = false;
   editing.value = null;
+  form.name = "";
+  form.slug = "";
+  form.description = "";
+  form.ownerEmail = "";
 }
 
 async function handleSubmit() {
   if (!form.name.trim()) return;
+  if (!editing.value && !form.slug.trim()) return;
   submitting.value = true;
   try {
     if (editing.value) {
-      await api.put(`/api/admin/workspaces/${editing.value.id}`, form);
+      await api.put(`/api/admin/workspaces/${editing.value.id}`, {
+        name: form.name,
+      });
       toast.add({
         severity: "success",
         summary: "Thành công",
@@ -199,7 +275,12 @@ async function handleSubmit() {
         life: 3000,
       });
     } else {
-      await api.post("/api/admin/workspaces", form);
+      await api.post("/api/admin/workspaces", {
+        name: form.name,
+        slug: form.slug,
+        description: form.description,
+        ownerEmail: form.ownerEmail || undefined,
+      });
       toast.add({
         severity: "success",
         summary: "Thành công",

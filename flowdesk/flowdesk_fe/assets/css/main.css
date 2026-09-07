@@ -11,6 +11,7 @@
 
   body {
     font-family: "Roboto", system-ui, sans-serif;
+    font-size: 14px;
     background-color: #eef2f6;
     color: #0f172a;
     -webkit-font-smoothing: antialiased;
@@ -44,7 +45,7 @@
   }
 
   .fd-page {
-    @apply p-6 md:p-8;
+    @apply p-5 md:p-6;
   }
 
   /* ── Sidebar nav ── */
@@ -59,7 +60,7 @@
   }
 
   .fd-nav-item:not(.fd-nav-item--active):hover {
-    background-color: #f1f5f9;
+    background-color: #dbdee4;
     color: #64748b;
   }
 
@@ -93,7 +94,7 @@
   }
 
   .fd-stat-value {
-    @apply text-2xl font-bold mt-1;
+    @apply text-xl font-bold mt-1;
     color: #0f172a;
     letter-spacing: -0.02em;
   }
@@ -128,7 +129,7 @@
   }
 
   .fd-page-title {
-    @apply text-2xl md:text-3xl font-bold;
+    @apply text-xl md:text-2xl font-bold;
     color: #0f172a;
     letter-spacing: -0.025em;
   }
@@ -171,12 +172,12 @@
   }
 
   .fd-card-header {
-    @apply px-6 pt-5 pb-4 border-b;
+    @apply px-5 pt-4 pb-3 border-b;
     border-color: #f1f5f9;
   }
 
   .fd-card-body {
-    @apply p-6;
+    @apply p-5;
   }
 
   /* ── Search bar ── */
@@ -225,7 +226,12 @@
 }
 
 .p-card .p-card-body {
-  padding: 1.25rem !important;
+  padding: 1rem !important;
+}
+
+.p-toggleswitch {
+  transform: scale(0.85);
+  transform-origin: center;
 }
 
 .p-datatable .p-datatable-thead > tr > th {
@@ -234,7 +240,7 @@
   font-weight: 600 !important;
   font-size: 0.8125rem !important;
   border-color: #f1f5f9 !important;
-  padding: 0.875rem 1rem !important;
+  padding: 0.75rem 0.875rem !important;
 }
 
 .p-datatable .p-datatable-tbody > tr > td {
@@ -321,4 +327,18 @@
 
 .fd-user-menu .p-menu-item:last-child .p-menu-item-link:hover {
   background-color: #fef2f2 !important;
+}
+
+/* Hide PrimeVue invalid license banner */
+.p-invalid-license,
+.p-licensekey-warning,
+[class*="invalid-license"],
+[class*="licensekey"],
+[class*="license-warning"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  height: 0 !important;
+  overflow: hidden !important;
 }

@@ -62,6 +62,12 @@ public class MemberServiceImpl implements MemberService {
   @Override
   @Transactional(readOnly = true)
   public List<MemberResponse> getMembers(Long workspaceId, String requesterEmail) {
+    return getMembers(workspaceId, requesterEmail, null);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<MemberResponse> getMembers(Long workspaceId, String requesterEmail, String search) {
     findWorkspaceOrThrow(workspaceId);
     User requester = findUserOrThrow(requesterEmail);
 
@@ -71,7 +77,10 @@ public class MemberServiceImpl implements MemberService {
       assertCanAccessWorkspace(requester, workspaceId);
     }
 
-    return memberRepository.findAllByWorkspaceIdAndIsActiveTrue(workspaceId)
+    List<WorkspaceMember> members = search == null || search.isBlank()
+        ? memberRepository.findAllByWorkspaceId(workspaceId)
+        : memberRepository.searchByWorkspaceId(workspaceId, search);
+    return members
         .stream().map(MemberResponse::from).toList();
   }
 

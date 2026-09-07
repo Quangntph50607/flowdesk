@@ -163,8 +163,16 @@ public class WorkspaceServiceImpl implements WorkspaceService {
 
   @Override
   public List<WorkspaceResponse> getBranches(Long parentId) {
+    return getBranches(parentId, null);
+  }
+
+  @Override
+  public List<WorkspaceResponse> getBranches(Long parentId, String search) {
     findWorkspaceOrThrow(parentId);
-    return workspaceRepository.findAllByParentIdAndIsActiveTrue(parentId)
+    List<Workspace> branches = search == null || search.isBlank()
+        ? workspaceRepository.findAllByParentIdAndIsActiveTrue(parentId)
+        : workspaceRepository.findByParentIdAndIsActiveTrueAndNameContainingIgnoreCase(parentId, search);
+    return branches
         .stream().map(WorkspaceResponse::from).toList();
   }
 

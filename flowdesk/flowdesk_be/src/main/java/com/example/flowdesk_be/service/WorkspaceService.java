@@ -26,6 +26,8 @@ public interface WorkspaceService {
 
   List<WorkspaceResponse> getBranches(Long parentId);
 
+  List<WorkspaceResponse> getBranches(Long parentId, String search);
+
   WorkspaceResponse updateBranch(Long parentId, Long branchId, UpdateWorkspaceRequest request);
 
   void deleteBranch(Long parentId, Long branchId);
