@@ -57,6 +57,7 @@
             label="Tạo chi nhánh"
             icon="pi pi-plus"
             size="small"
+            class="!px-5 !text-sm"
             @click="openCreateBranch"
           />
         </div>
@@ -144,6 +145,7 @@
             label="Thêm thành viên"
             icon="pi pi-user-plus"
             size="small"
+            class="!px-5 !text-sm"
             @click="openAddMember"
           />
         </div>
@@ -245,223 +247,37 @@
       </template>
     </Card>
 
-    <!-- DIALOG: Tạo / Sửa chi nhánh -->
-    <Dialog
-      v-model:visible="showBranchDialog"
-      :header="editingBranch ? 'Cập nhật chi nhánh' : 'Tạo chi nhánh mới'"
-      modal
-      style="width: 460px"
-    >
-      <div class="flex flex-col gap-4 pt-2">
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium"
-            >Tên chi nhánh <span class="text-red-500">*</span></label
-          >
-          <InputText
-            v-model="branchForm.name"
-            placeholder="Nhập tên chi nhánh"
-            fluid
-          />
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium"
-            >Slug <span class="text-red-500">*</span></label
-          >
-          <InputText
-            v-model="branchForm.slug"
-            placeholder="ten-chi-nhanh"
-            fluid
-            :disabled="!!editingBranch"
-          />
-        </div>
-      </div>
-      <template #footer>
-        <Button
-          label="Hủy"
-          severity="secondary"
-          text
-          @click="closeBranchDialog"
-        />
-        <Button
-          :label="editingBranch ? 'Cập nhật' : 'Tạo'"
-          :loading="submittingBranch"
-          @click="handleBranchSubmit"
-        />
-      </template>
-    </Dialog>
-
-    <!-- DIALOG: Sửa workspace -->
-    <Dialog
+    <WorkspaceEditDialog
       v-model:visible="showEditWorkspace"
-      header="Cập nhật workspace"
-      modal
-      style="width: 460px"
-    >
-      <div class="flex flex-col gap-4 pt-2">
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium"
-            >Tên workspace <span class="text-red-500">*</span></label
-          >
-          <InputText v-model="wsForm.name" fluid />
-        </div>
-      </div>
-      <template #footer>
-        <Button
-          label="Hủy"
-          severity="secondary"
-          text
-          @click="showEditWorkspace = false"
-        />
-        <Button
-          label="Cập nhật"
-          :loading="submittingWs"
-          @click="handleUpdateWorkspace"
-        />
-      </template>
-    </Dialog>
+      :workspace="workspace ? { id: workspaceId, name: workspace.name } : null"
+      @updated="
+        (name) => {
+          workspace = { ...workspace, name };
+        }
+      "
+    />
 
-    <!-- DIALOG: Thêm thành viên -->
-    <Dialog
+    <WorkspaceBranchForm
+      v-model:visible="showBranchDialog"
+      :workspace-id="workspaceId"
+      :branch="editingBranch"
+      @saved="
+        () => {
+          closeBranchDialog();
+          fetchBranches();
+        }
+      "
+    />
+
+    <WorkspaceAddMember
       v-model:visible="showAddMemberDialog"
-      header="Thêm thành viên"
-      modal
-      style="width: 500px"
-    >
-      <div class="flex gap-2 mb-4 pt-2">
-        <button
-          :class="['fd-tab', addMemberTab === 'new' ? 'fd-tab--active' : '']"
-          @click="addMemberTab = 'new'"
-        >
-          Tạo tài khoản mới
-        </button>
-        <button
-          :class="[
-            'fd-tab',
-            addMemberTab === 'existing' ? 'fd-tab--active' : '',
-          ]"
-          @click="addMemberTab = 'existing'"
-        >
-          Chọn có sẵn
-        </button>
-      </div>
-
-      <!-- Tab: Tạo mới -->
-      <div v-if="addMemberTab === 'new'" class="flex flex-col gap-3">
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium"
-            >Họ và tên <span class="text-red-500">*</span></label
-          >
-          <InputText
-            v-model="newMemberForm.fullName"
-            placeholder="Nguyễn Văn A"
-            fluid
-          />
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium"
-            >Email <span class="text-red-500">*</span></label
-          >
-          <InputText
-            v-model="newMemberForm.email"
-            placeholder="email@example.com"
-            fluid
-          />
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium"
-            >Mật khẩu <span class="text-red-500">*</span></label
-          >
-          <InputText
-            v-model="newMemberForm.password"
-            type="password"
-            placeholder="••••••••"
-            fluid
-          />
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium"
-            >Vai trò <span class="text-red-500">*</span></label
-          >
-          <Select
-            v-model="newMemberForm.roleCode"
-            :options="addRoleOptions"
-            option-label="label"
-            option-value="value"
-            fluid
-          />
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium">Chi nhánh</label>
-          <Select
-            v-model="newMemberForm.branchId"
-            :options="[{ id: null, name: '— Workspace tổng' }, ...branches]"
-            option-label="name"
-            option-value="id"
-            placeholder="Chọn chi nhánh..."
-            fluid
-          />
-        </div>
-      </div>
-
-      <!-- Tab: Chọn có sẵn -->
-      <div v-if="addMemberTab === 'existing'" class="flex flex-col gap-3">
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium">Chọn người dùng</label>
-          <Select
-            v-model="existingMemberForm.userId"
-            :options="availableUsersForWorkspace"
-            option-label="fullName"
-            option-value="userId"
-            placeholder="Tìm và chọn..."
-            filter
-            @filter="handleAvailableUsersFilter"
-            fluid
-          >
-            <template #option="{ option }">
-              <div class="flex flex-col">
-                <span class="text-sm font-medium">{{ option.fullName }}</span>
-                <span class="text-xs" style="color: #94a3b8">{{
-                  option.email
-                }}</span>
-              </div>
-            </template>
-          </Select>
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium"
-            >Vai trò <span class="text-red-500">*</span></label
-          >
-          <Select
-            v-model="existingMemberForm.roleCode"
-            :options="addRoleOptions"
-            option-label="label"
-            option-value="value"
-            fluid
-          />
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium">Chi nhánh</label>
-          <Select
-            v-model="existingMemberForm.branchId"
-            :options="[{ id: null, name: '— Workspace tổng' }, ...branches]"
-            option-label="name"
-            option-value="id"
-            placeholder="Chọn chi nhánh..."
-            fluid
-          />
-        </div>
-      </div>
-
-      <template #footer>
-        <Button
-          label="Hủy"
-          severity="secondary"
-          text
-          @click="showAddMemberDialog = false"
-        />
-        <Button label="Thêm" :loading="addingMember" @click="handleAddMember" />
-      </template>
-    </Dialog>
+      :workspace-id="workspaceId"
+      :is-owner="!!canManage"
+      :branches="branches"
+      :available-users="availableUsersForWorkspace"
+      @added="fetchAllMembers"
+      @filter="handleAvailableUsersFilter"
+    />
 
     <ConfirmDialog />
   </div>
@@ -498,132 +314,25 @@ const canManage = computed(() => {
 
 // ── Edit workspace ──────────────────────────────────────────────────
 const showEditWorkspace = ref(false);
-const submittingWs = ref(false);
-const wsForm = reactive({ name: "" });
-
 function openEditWorkspace() {
-  wsForm.name = workspace.value?.name ?? "";
   showEditWorkspace.value = true;
-}
-
-async function handleUpdateWorkspace() {
-  if (!wsForm.name.trim()) return;
-  submittingWs.value = true;
-  try {
-    const res = await api.put(`/api/admin/workspaces/${workspaceId.value}`, {
-      name: wsForm.name,
-    });
-    workspace.value = {
-      ...workspace.value,
-      name: res.data.data?.name ?? wsForm.name,
-    };
-    showEditWorkspace.value = false;
-    toast.add({
-      severity: "success",
-      summary: "Thành công",
-      detail: "Đã cập nhật workspace",
-      life: 3000,
-    });
-  } catch (err: any) {
-    toast.add({
-      severity: "error",
-      summary: "Lỗi",
-      detail: err.response?.data?.message ?? "Có lỗi xảy ra",
-      life: 3000,
-    });
-  } finally {
-    submittingWs.value = false;
-  }
 }
 
 // ── Branches ────────────────────────────────────────────────────────
 const showBranchDialog = ref(false);
-const submittingBranch = ref(false);
 const editingBranch = ref<any>(null);
-const branchForm = reactive({ name: "", slug: "" });
-
-// Auto-generate slug từ tên
-function toSlug(str: string) {
-  return str
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/Đ/g, "d")
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
-}
-
-watch(
-  () => branchForm.name,
-  (val) => {
-    if (!editingBranch.value) {
-      branchForm.slug = toSlug(val);
-    }
-  },
-);
 
 function openCreateBranch() {
   editingBranch.value = null;
-  branchForm.name = "";
-  branchForm.slug = "";
   showBranchDialog.value = true;
 }
-
 function openEditBranch(branch: any) {
   editingBranch.value = branch;
-  branchForm.name = branch.name;
-  branchForm.slug = branch.slug ?? "";
   showBranchDialog.value = true;
 }
-
 function closeBranchDialog() {
   showBranchDialog.value = false;
   editingBranch.value = null;
-}
-
-async function handleBranchSubmit() {
-  if (!branchForm.name.trim()) return;
-  if (!editingBranch.value && !branchForm.slug.trim()) return;
-  submittingBranch.value = true;
-  try {
-    if (editingBranch.value) {
-      await api.put(
-        `/api/workspaces/${workspaceId.value}/branches/${editingBranch.value.id}`,
-        { name: branchForm.name },
-      );
-      toast.add({
-        severity: "success",
-        summary: "Thành công",
-        detail: "Đã cập nhật chi nhánh",
-        life: 3000,
-      });
-    } else {
-      await api.post(`/api/workspaces/${workspaceId.value}/branches`, {
-        name: branchForm.name,
-        slug: branchForm.slug,
-      });
-      toast.add({
-        severity: "success",
-        summary: "Thành công",
-        detail: "Đã tạo chi nhánh",
-        life: 3000,
-      });
-    }
-    closeBranchDialog();
-    fetchBranches();
-  } catch (err: any) {
-    toast.add({
-      severity: "error",
-      summary: "Lỗi",
-      detail: err.response?.data?.message ?? "Có lỗi xảy ra",
-      life: 3000,
-    });
-  } finally {
-    submittingBranch.value = false;
-  }
 }
 
 function confirmDeleteBranch(branch: any) {
@@ -661,51 +370,10 @@ function confirmDeleteBranch(branch: any) {
 
 // ── Members ─────────────────────────────────────────────────────────
 const showAddMemberDialog = ref(false);
-const addMemberTab = ref<"new" | "existing">("new");
-const addingMember = ref(false);
-const newMemberForm = reactive({
-  fullName: "",
-  email: "",
-  password: "",
-  roleCode: "AGENT",
-  branchId: null as number | null,
-});
-const existingMemberForm = reactive({
-  userId: null as number | null,
-  roleCode: "AGENT",
-  branchId: null as number | null,
-});
 const availableUsersForWorkspace = ref<any[]>([]);
 let availableUsersSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
-// OWNER & SUPER_ADMIN chọn ADMIN/AGENT, còn lại chỉ AGENT
-const addRoleOptions = computed(() => {
-  const isOwner =
-    authStore.isSuperAdmin ||
-    authStore.currentUser?.workspaces?.find(
-      (w: any) =>
-        w.workspaceId === Number(workspaceId.value) &&
-        w.parentId === null &&
-        w.roleCode === "OWNER",
-    );
-  return isOwner
-    ? [
-        { label: "Quản trị viên (Admin)", value: "ADMIN" },
-        { label: "Nhân viên (Agent)", value: "AGENT" },
-      ]
-    : [{ label: "Nhân viên (Agent)", value: "AGENT" }];
-});
-
 function openAddMember() {
-  addMemberTab.value = "new";
-  newMemberForm.fullName = "";
-  newMemberForm.email = "";
-  newMemberForm.password = "";
-  newMemberForm.roleCode = "AGENT";
-  newMemberForm.branchId = null;
-  existingMemberForm.userId = null;
-  existingMemberForm.roleCode = "AGENT";
-  existingMemberForm.branchId = null;
   showAddMemberDialog.value = true;
   if (authStore.isSuperAdmin) fetchAvailableUsers();
 }
@@ -733,82 +401,12 @@ async function fetchAvailableUsers(search = "") {
   }
 }
 
-function handleAvailableUsersFilter(event: any) {
+function handleAvailableUsersFilter(search: string) {
   if (availableUsersSearchTimer) clearTimeout(availableUsersSearchTimer);
-  const search = event?.value ?? event?.filter ?? "";
   availableUsersSearchTimer = setTimeout(
     () => fetchAvailableUsers(search),
-    1000,
+    400,
   );
-}
-
-async function handleAddMember() {
-  addingMember.value = true;
-  try {
-    let userId: number;
-    let roleCode: string;
-    let targetWorkspaceId: string | number;
-
-    if (addMemberTab.value === "new") {
-      if (
-        !newMemberForm.fullName.trim() ||
-        !newMemberForm.email.trim() ||
-        !newMemberForm.password.trim()
-      ) {
-        toast.add({
-          severity: "warn",
-          summary: "Thiếu thông tin",
-          detail: "Vui lòng điền đầy đủ",
-          life: 3000,
-        });
-        return;
-      }
-      const regRes = await api.post("/api/auth/register", {
-        fullName: newMemberForm.fullName,
-        email: newMemberForm.email,
-        password: newMemberForm.password,
-      });
-      userId = regRes.data.data?.id ?? regRes.data.data?.userId;
-      roleCode = newMemberForm.roleCode;
-      // Nếu chọn chi nhánh → add vào chi nhánh, không thì add vào workspace tổng
-      targetWorkspaceId = newMemberForm.branchId ?? workspaceId.value;
-    } else {
-      if (!existingMemberForm.userId) {
-        toast.add({
-          severity: "warn",
-          summary: "Chưa chọn",
-          detail: "Vui lòng chọn người dùng",
-          life: 3000,
-        });
-        return;
-      }
-      userId = existingMemberForm.userId;
-      roleCode = existingMemberForm.roleCode;
-      targetWorkspaceId = existingMemberForm.branchId ?? workspaceId.value;
-    }
-
-    await api.post(`/api/workspaces/${targetWorkspaceId}/members`, {
-      userId,
-      roleCode,
-    });
-    toast.add({
-      severity: "success",
-      summary: "Thành công",
-      detail: "Đã thêm thành viên",
-      life: 3000,
-    });
-    showAddMemberDialog.value = false;
-    fetchAllMembers();
-  } catch (err: any) {
-    toast.add({
-      severity: "error",
-      summary: "Lỗi",
-      detail: err.response?.data?.message ?? "Có lỗi xảy ra",
-      life: 3000,
-    });
-  } finally {
-    addingMember.value = false;
-  }
 }
 
 async function toggleMember(member: any) {
@@ -897,7 +495,6 @@ async function fetchBranches() {
 async function fetchAllMembers() {
   loadingMembers.value = true;
   try {
-    // 1. Members workspace tổng (OWNER, ADMIN)
     const parentRes = await api.get(
       `/api/workspaces/${workspaceId.value}/members`,
     );
@@ -907,7 +504,6 @@ async function fetchAllMembers() {
       branchName: null,
     }));
 
-    // 2. Members từng chi nhánh (AGENT)
     const branchList: any[] = branches.value.length
       ? branches.value
       : await api
@@ -976,21 +572,5 @@ onMounted(async () => {
   color: #0f172a;
   display: flex;
   align-items: center;
-}
-.fd-tab {
-  padding: 6px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.fd-tab--active {
-  background: #0f172a;
-  color: #fff;
-  border-color: #0f172a;
 }
 </style>

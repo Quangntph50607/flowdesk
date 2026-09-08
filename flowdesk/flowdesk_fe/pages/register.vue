@@ -12,71 +12,75 @@
     </div>
 
     <div class="px-8 pb-8">
-        <form class="flex flex-col gap-4" @submit.prevent="handleRegister">
-          <div class="flex flex-col gap-1">
-            <label class="text-sm font-medium text-surface-700"
-              >Họ và tên</label
-            >
-            <InputText
-              v-model="form.fullName"
-              placeholder="Nguyễn Văn A"
-              :invalid="!!errors.fullName"
-              fluid
-            />
-            <small v-if="errors.fullName" class="text-red-500">{{
-              errors.fullName
-            }}</small>
-          </div>
-
-          <div class="flex flex-col gap-1">
-            <label class="text-sm font-medium text-surface-700">Email</label>
-            <InputText
-              v-model="form.email"
-              type="email"
-              placeholder="email@example.com"
-              :invalid="!!errors.email"
-              fluid
-            />
-            <small v-if="errors.email" class="text-red-500">{{
-              errors.email
-            }}</small>
-          </div>
-
-          <div class="flex flex-col gap-1">
-            <label class="text-sm font-medium text-surface-700">Mật khẩu</label>
-            <Password
-              v-model="form.password"
-              placeholder="Tối thiểu 6 ký tự"
-              :feedback="false"
-              toggle-mask
-              :invalid="!!errors.password"
-              fluid
-            />
-            <small v-if="errors.password" class="text-red-500">{{
-              errors.password
-            }}</small>
-          </div>
-
-          <Message v-if="errorMsg" severity="error" :closable="false">{{
-            errorMsg
-          }}</Message>
-          <Message v-if="successMsg" severity="success" :closable="false">{{
-            successMsg
-          }}</Message>
-
-          <Button type="submit" label="Đăng ký" :loading="loading" fluid />
-        </form>
-
-        <div class="text-center mt-6 text-sm">
-          <span style="color: #64748b">Đã có tài khoản? </span>
-          <NuxtLink
-            to="/login"
-            class="font-semibold hover:underline"
-            style="color: #0f172a"
-          >
-            Đăng nhập
-          </NuxtLink>
+      <form class="flex flex-col gap-4" @submit.prevent="handleRegister">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-surface-700">Họ và tên</label>
+          <InputText
+            v-model="form.fullName"
+            placeholder="Nguyễn Văn A"
+            :invalid="!!errors.fullName"
+            fluid
+          />
+          <small v-if="errors.fullName" class="text-red-500">{{
+            errors.fullName
+          }}</small>
         </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-surface-700">Email</label>
+          <InputText
+            v-model="form.email"
+            type="email"
+            placeholder="email@example.com"
+            :invalid="!!errors.email"
+            fluid
+          />
+          <small v-if="errors.email" class="text-red-500">{{
+            errors.email
+          }}</small>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-surface-700">Mật khẩu</label>
+          <Password
+            v-model="form.password"
+            placeholder="Tối thiểu 6 ký tự"
+            :feedback="false"
+            toggle-mask
+            :invalid="!!errors.password"
+            fluid
+          />
+          <small v-if="errors.password" class="text-red-500">{{
+            errors.password
+          }}</small>
+        </div>
+
+        <Message v-if="errorMsg" severity="error" :closable="false">{{
+          errorMsg
+        }}</Message>
+        <Message v-if="successMsg" severity="success" :closable="false">{{
+          successMsg
+        }}</Message>
+
+        <Button
+          type="submit"
+          label="Đăng ký"
+          :loading="loading"
+          fluid
+          class="!px-5 !text-sm"
+        />
+      </form>
+
+      <div class="text-center mt-6 text-sm">
+        <span style="color: #64748b">Đã có tài khoản? </span>
+        <NuxtLink
+          to="/login"
+          class="font-semibold hover:underline"
+          style="color: #0f172a"
+        >
+          Đăng nhập
+        </NuxtLink>
+      </div>
     </div>
   </div>
 </template>

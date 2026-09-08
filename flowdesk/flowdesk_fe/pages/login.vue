@@ -14,53 +14,59 @@
     </div>
 
     <div class="px-8 pb-8">
-        <form class="flex flex-col gap-4" @submit.prevent="handleLogin">
-          <div class="flex flex-col gap-1">
-            <label class="text-sm font-medium text-surface-700">Email</label>
-            <InputText
-              v-model="form.email"
-              type="email"
-              placeholder="email@example.com"
-              :invalid="!!errors.email"
-              fluid
-            />
-            <small v-if="errors.email" class="text-red-500">{{
-              errors.email
-            }}</small>
-          </div>
-
-          <div class="flex flex-col gap-1">
-            <label class="text-sm font-medium text-surface-700">Mật khẩu</label>
-            <Password
-              v-model="form.password"
-              placeholder="Nhập mật khẩu"
-              :feedback="false"
-              toggle-mask
-              :invalid="!!errors.password"
-              fluid
-            />
-            <small v-if="errors.password" class="text-red-500">{{
-              errors.password
-            }}</small>
-          </div>
-
-          <Message v-if="errorMsg" severity="error" :closable="false">
-            {{ errorMsg }}
-          </Message>
-
-          <Button type="submit" label="Đăng nhập" :loading="loading" fluid />
-        </form>
-
-        <div class="text-center mt-6 text-sm">
-          <span style="color: #64748b">Chưa có tài khoản? </span>
-          <NuxtLink
-            to="/register"
-            class="font-semibold hover:underline"
-            style="color: #0f172a"
-          >
-            Đăng ký
-          </NuxtLink>
+      <form class="flex flex-col gap-4" @submit.prevent="handleLogin">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-surface-700">Email</label>
+          <InputText
+            v-model="form.email"
+            type="email"
+            placeholder="email@example.com"
+            :invalid="!!errors.email"
+            fluid
+          />
+          <small v-if="errors.email" class="text-red-500">{{
+            errors.email
+          }}</small>
         </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-surface-700">Mật khẩu</label>
+          <Password
+            v-model="form.password"
+            placeholder="Nhập mật khẩu"
+            :feedback="false"
+            toggle-mask
+            :invalid="!!errors.password"
+            fluid
+          />
+          <small v-if="errors.password" class="text-red-500">{{
+            errors.password
+          }}</small>
+        </div>
+
+        <Message v-if="errorMsg" severity="error" :closable="false">
+          {{ errorMsg }}
+        </Message>
+
+        <Button
+          type="submit"
+          label="Đăng nhập"
+          :loading="loading"
+          fluid
+          class="!px-5 !text-sm"
+        />
+      </form>
+
+      <div class="text-center mt-6 text-sm">
+        <span style="color: #64748b">Chưa có tài khoản? </span>
+        <NuxtLink
+          to="/register"
+          class="font-semibold hover:underline"
+          style="color: #0f172a"
+        >
+          Đăng ký
+        </NuxtLink>
+      </div>
     </div>
   </div>
 </template>
