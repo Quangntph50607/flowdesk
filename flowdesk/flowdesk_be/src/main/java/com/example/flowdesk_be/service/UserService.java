@@ -21,4 +21,11 @@ public interface UserService {
   UserResponse toggleActive(Long id);
 
   UserResponse getUserByEmail(String email);
+
+  /**
+   * Danh sách user active, chưa là member của workspace chỉ định.
+   * Dùng cho dialog "Thêm thành viên" — accessible bởi OWNER/ADMIN, không chỉ
+   * SUPER_ADMIN.
+   */
+  List<UserResponse> getAvailableUsersForWorkspace(Long workspaceId, String search);
 }

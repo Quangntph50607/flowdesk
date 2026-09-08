@@ -81,24 +81,40 @@
 
     <!-- Tab: Chọn có sẵn -->
     <div v-if="tab === 'existing'" class="flex flex-col gap-3">
+      <!-- Chọn chi nhánh trước để filter danh sách user -->
+      <div class="flex flex-col gap-1" v-if="branches && branches.length">
+        <label class="text-sm font-medium">Chi nhánh</label>
+        <Select
+          v-model="existingForm.branchId"
+          :options="[{ id: null, name: '— Workspace tổng' }, ...branches]"
+          option-label="name"
+          option-value="id"
+          placeholder="Chọn chi nhánh..."
+          fluid
+        />
+      </div>
       <div class="flex flex-col gap-1">
         <label class="text-sm font-medium">Chọn người dùng</label>
         <Select
           v-model="existingForm.userId"
-          :options="availableUsers"
+          :options="filteredUsers"
           option-label="fullName"
           option-value="userId"
           placeholder="Tìm và chọn..."
           filter
-          @filter="handleFilter"
           fluid
         >
           <template #option="{ option }">
-            <div class="flex flex-col">
+            <div class="flex flex-col py-0.5">
               <span class="text-sm font-medium">{{ option.fullName }}</span>
               <span class="text-xs" style="color: #94a3b8">{{
                 option.email
               }}</span>
+            </div>
+          </template>
+          <template #empty>
+            <div class="text-sm text-center py-2" style="color: #94a3b8">
+              Không có người dùng khả dụng
             </div>
           </template>
         </Select>
@@ -112,17 +128,6 @@
           :options="roleOptions"
           option-label="label"
           option-value="value"
-          fluid
-        />
-      </div>
-      <div class="flex flex-col gap-1" v-if="branches && branches.length">
-        <label class="text-sm font-medium">Chi nhánh</label>
-        <Select
-          v-model="existingForm.branchId"
-          :options="[{ id: null, name: '— Workspace tổng' }, ...branches]"
-          option-label="name"
-          option-value="id"
-          placeholder="Chọn chi nhánh..."
           fluid
         />
       </div>
@@ -154,12 +159,18 @@ const props = defineProps<{
   workspaceId: string | number;
   isOwner: boolean;
   branches?: { id: number; name: string }[];
-  availableUsers: { userId: number; fullName: string; email: string }[];
+  // Toàn bộ member workspace tổng + chi nhánh (từ /all-members)
+  allMembers?: {
+    userId: number;
+    fullName: string;
+    email: string;
+    branchId?: number | null;
+    workspaceId?: number;
+  }[];
 }>();
 const emit = defineEmits<{
   (e: "update:visible", val: boolean): void;
   (e: "added"): void;
-  (e: "filter", search: string): void;
 }>();
 
 const api = useApi();
@@ -189,6 +200,42 @@ const roleOptions = computed(() =>
     : [{ label: "Nhân viên (Agent)", value: "AGENT" }],
 );
 
+// Danh sách user để chọn — dedupe theo userId, lọc theo chi nhánh được chọn
+const filteredUsers = computed(() => {
+  const members = props.allMembers ?? [];
+  const targetBranchId = existingForm.branchId; // null = workspace tổng
+
+  // userId nào đã có trong target (workspace tổng hoặc chi nhánh được chọn)
+  const alreadyIn = new Set(
+    members
+      .filter(
+        (m) =>
+          targetBranchId === null
+            ? m.branchId == null // đã là member workspace tổng
+            : m.branchId === targetBranchId, // đã là member chi nhánh đó
+      )
+      .map((m) => m.userId),
+  );
+
+  // Dedupe toàn bộ member theo userId, bỏ người đã có trong target
+  const seen = new Set<number>();
+  return members
+    .filter((m) => {
+      if (seen.has(m.userId)) return false;
+      seen.add(m.userId);
+      return !alreadyIn.has(m.userId);
+    })
+    .map((m) => ({ userId: m.userId, fullName: m.fullName, email: m.email }));
+});
+
+// Reset userId khi đổi chi nhánh vì list thay đổi
+watch(
+  () => existingForm.branchId,
+  () => {
+    existingForm.userId = null;
+  },
+);
+
 watch(
   () => props.visible,
   (val) => {
@@ -205,13 +252,6 @@ watch(
     }
   },
 );
-
-let filterTimer: ReturnType<typeof setTimeout> | undefined;
-function handleFilter(event: any) {
-  if (filterTimer) clearTimeout(filterTimer);
-  const search = event?.value ?? event?.filter ?? "";
-  filterTimer = setTimeout(() => emit("filter", search), 400);
-}
 
 async function handleSubmit() {
   loading.value = true;

@@ -57,6 +57,12 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
+  public List<UserResponse> getAvailableUsersForWorkspace(Long workspaceId, String search) {
+    return userRepository.findAvailableForWorkspace(workspaceId, search == null ? "" : search)
+        .stream().map(UserResponse::from).toList();
+  }
+
+  @Override
   @Transactional
   public UserResponse updateUser(Long id, UpdateUserRequest request) {
     User user = findByIdOrThrow(id);

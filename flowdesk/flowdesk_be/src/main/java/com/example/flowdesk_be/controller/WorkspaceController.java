@@ -4,9 +4,12 @@ import com.example.flowdesk_be.dto.request.AddMemberRequest;
 import com.example.flowdesk_be.dto.request.CreateWorkspaceRequest;
 import com.example.flowdesk_be.dto.request.UpdateWorkspaceRequest;
 import com.example.flowdesk_be.dto.response.ApiResponse;
+import com.example.flowdesk_be.dto.response.MemberGroupResponse;
 import com.example.flowdesk_be.dto.response.MemberResponse;
+import com.example.flowdesk_be.dto.response.UserResponse;
 import com.example.flowdesk_be.dto.response.WorkspaceResponse;
 import com.example.flowdesk_be.service.MemberService;
+import com.example.flowdesk_be.service.UserService;
 import com.example.flowdesk_be.service.WorkspaceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,6 +29,7 @@ public class WorkspaceController {
 
   private final WorkspaceService workspaceService;
   private final MemberService memberService;
+  private final UserService userService;
 
   // ================================================================
   // SUPER_ADMIN — Workspace tổng /api/admin/workspaces
@@ -148,6 +152,30 @@ public class WorkspaceController {
   // ================================================================
   // OWNER + ADMIN — Members /api/workspaces/{id}/members
   // ================================================================
+
+  @Tag(name = "Workspace – Members")
+  @Operation(summary = "Danh sách user chưa là member của workspace (dùng cho add-member dialog)")
+  @GetMapping("/api/workspaces/{workspaceId}/available-users")
+  public ResponseEntity<ApiResponse<List<UserResponse>>> getAvailableUsers(
+      @PathVariable Long workspaceId,
+      @RequestParam(required = false) String search,
+      @AuthenticationPrincipal UserDetails userDetails) {
+
+    memberService.getMembers(workspaceId, userDetails.getUsername()); // phân quyền: throws 403 nếu không có quyền
+    return ResponseEntity.ok(ApiResponse.success(200, "OK",
+        userService.getAvailableUsersForWorkspace(workspaceId, search)));
+  }
+
+  @Tag(name = "Workspace – Members")
+  @Operation(summary = "Tất cả thành viên của workspace tổng + chi nhánh, group theo user")
+  @GetMapping("/api/workspaces/{workspaceId}/all-members")
+  public ResponseEntity<ApiResponse<List<MemberGroupResponse>>> getAllMembersGrouped(
+      @PathVariable Long workspaceId,
+      @AuthenticationPrincipal UserDetails userDetails) {
+
+    return ResponseEntity.ok(ApiResponse.success(200, "OK",
+        memberService.getAllMembersGrouped(workspaceId, userDetails.getUsername())));
+  }
 
   @Tag(name = "Workspace – Members")
   @Operation(summary = "Thêm thành viên vào workspace/chi nhánh")
