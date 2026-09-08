@@ -4,7 +4,15 @@
       title="Users"
       subtitle="Quản lý người dùng trong hệ thống"
       breadcrumb="Management"
-    />
+    >
+      <Button
+        label="Thêm người dùng"
+        icon="pi pi-plus"
+        size="small"
+        class="!px-5 !text-sm"
+        @click="showCreate = true"
+      />
+    </AppPageHeader>
 
     <Card>
       <template #header>
@@ -73,33 +81,13 @@
       </template>
     </Card>
 
-    <!-- Edit dialog -->
-    <Dialog
+    <UserCreateDialog v-model:visible="showCreate" @created="fetchUsers" />
+
+    <UserEditDialog
       v-model:visible="showEdit"
-      header="Cập nhật người dùng"
-      modal
-      style="width: 440px"
-    >
-      <div class="flex flex-col gap-4 pt-2">
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium">Họ và tên</label>
-          <InputText v-model="editForm.fullName" fluid />
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium">Email</label>
-          <InputText v-model="editForm.email" disabled fluid />
-        </div>
-      </div>
-      <template #footer>
-        <Button
-          label="Hủy"
-          severity="secondary"
-          text
-          @click="showEdit = false"
-        />
-        <Button label="Cập nhật" :loading="submitting" @click="handleUpdate" />
-      </template>
-    </Dialog>
+      :user="editingUser"
+      @updated="fetchUsers"
+    />
   </div>
 </template>
 
@@ -112,20 +100,16 @@ const api = useApi();
 const authStore = useAuthStore();
 const toast = useToast();
 
-// Redirect nếu không phải SUPER_ADMIN
 onMounted(() => {
-  if (!authStore.isSuperAdmin) {
-    navigateTo("/dashboard");
-  }
+  if (!authStore.isSuperAdmin) navigateTo("/dashboard");
 });
 
 const users = ref<any[]>([]);
 const loading = ref(false);
 const search = ref("");
+const showCreate = ref(false);
 const showEdit = ref(false);
-const submitting = ref(false);
 const editingUser = ref<any>(null);
-const editForm = reactive({ fullName: "", email: "" });
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 async function fetchUsers() {
@@ -154,35 +138,7 @@ watch(search, () => {
 
 function openEdit(user: any) {
   editingUser.value = user;
-  editForm.fullName = user.fullName;
-  editForm.email = user.email;
   showEdit.value = true;
-}
-
-async function handleUpdate() {
-  submitting.value = true;
-  try {
-    await api.patch(`/api/admin/users/${editingUser.value.id}`, {
-      fullName: editForm.fullName,
-    });
-    toast.add({
-      severity: "success",
-      summary: "Thành công",
-      detail: "Đã cập nhật người dùng",
-      life: 3000,
-    });
-    showEdit.value = false;
-    fetchUsers();
-  } catch (err: any) {
-    toast.add({
-      severity: "error",
-      summary: "Lỗi",
-      detail: err.response?.data?.message ?? "Có lỗi xảy ra",
-      life: 3000,
-    });
-  } finally {
-    submitting.value = false;
-  }
 }
 
 async function toggleUser(user: any) {
@@ -191,7 +147,7 @@ async function toggleUser(user: any) {
     toast.add({
       severity: "success",
       summary: "Thành công",
-      detail: `Cập nhật trạng thái tài khoản thành công`,
+      detail: "Cập nhật trạng thái tài khoản thành công",
       life: 3000,
     });
     fetchUsers();

@@ -9,6 +9,7 @@
         v-if="authStore.isSuperAdmin"
         label="Tạo Workspace"
         icon="pi pi-plus"
+        class="!px-5 !text-sm"
         @click="openCreate"
       />
     </AppPageHeader>
@@ -86,63 +87,12 @@
       </template>
     </Card>
 
-    <!-- Dialog tạo / sửa (chỉ SUPER_ADMIN) -->
-    <Dialog
+    <WorkspaceFormDialog
       v-if="authStore.isSuperAdmin"
       v-model:visible="showDialog"
-      :header="editing ? 'Cập nhật Workspace' : 'Tạo Workspace mới'"
-      modal
-      style="width: 480px"
-    >
-      <div class="flex flex-col gap-4 pt-2">
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium"
-            >Tên workspace <span class="text-red-500">*</span></label
-          >
-          <InputText
-            v-model="form.name"
-            placeholder="Nhập tên workspace"
-            fluid
-          />
-        </div>
-        <div class="flex flex-col gap-1" v-if="!editing">
-          <label class="text-sm font-medium"
-            >Slug <span class="text-red-500">*</span></label
-          >
-          <InputText v-model="form.slug" placeholder="ten-workspace" fluid />
-          <span class="text-xs" style="color: #94a3b8"
-            >Tự động tạo từ tên, có thể chỉnh sửa</span
-          >
-        </div>
-        <div class="flex flex-col gap-1" v-if="!editing">
-          <label class="text-sm font-medium"
-            >Email chủ sở hữu (Owner) <span class="text-red-500">*</span></label
-          >
-          <InputText
-            v-model="form.ownerEmail"
-            placeholder="owner@example.com"
-            fluid
-          />
-        </div>
-        <div class="flex flex-col gap-1">
-          <label class="text-sm font-medium">Mô tả</label>
-          <Textarea
-            v-model="form.description"
-            placeholder="Nhập mô tả"
-            rows="3"
-            fluid
-          />
-        </div>
-      </div>
-      <template #footer>
-        <Button label="Hủy" severity="secondary" text @click="closeDialog" />
-        <Button
-          :label="editing ? 'Cập nhật' : 'Tạo'"
-          :loading="submitting"
-          @click="handleSubmit"
-        />
-      </template>
-    </Dialog>
+      :workspace="editing"
+      @saved="fetchWorkspaces"
+    />
 
     <ConfirmDialog />
   </div>
@@ -163,33 +113,8 @@ const workspaces = ref<any[]>([]);
 const loading = ref(false);
 const search = ref("");
 const showDialog = ref(false);
-const submitting = ref(false);
 const editing = ref<any>(null);
-const form = reactive({ name: "", slug: "", description: "", ownerEmail: "" });
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
-
-// Auto-generate slug từ tên workspace
-function toSlug(str: string) {
-  return str
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/Đ/g, "d")
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
-}
-
-watch(
-  () => form.name,
-  (val) => {
-    if (!editing.value) {
-      form.slug = toSlug(val);
-    }
-  },
-);
 
 async function fetchWorkspaces() {
   loading.value = true;
@@ -234,72 +159,12 @@ watch(search, () => {
 
 function openCreate() {
   editing.value = null;
-  form.name = "";
-  form.slug = "";
-  form.description = "";
-  form.ownerEmail = "";
   showDialog.value = true;
 }
 
 function openEdit(ws: any) {
   editing.value = ws;
-  form.name = ws.name;
-  form.slug = ws.slug ?? "";
-  form.description = ws.description ?? "";
-  form.ownerEmail = "";
   showDialog.value = true;
-}
-
-function closeDialog() {
-  showDialog.value = false;
-  editing.value = null;
-  form.name = "";
-  form.slug = "";
-  form.description = "";
-  form.ownerEmail = "";
-}
-
-async function handleSubmit() {
-  if (!form.name.trim()) return;
-  if (!editing.value && !form.slug.trim()) return;
-  submitting.value = true;
-  try {
-    if (editing.value) {
-      await api.put(`/api/admin/workspaces/${editing.value.id}`, {
-        name: form.name,
-      });
-      toast.add({
-        severity: "success",
-        summary: "Thành công",
-        detail: "Đã cập nhật workspace",
-        life: 3000,
-      });
-    } else {
-      await api.post("/api/admin/workspaces", {
-        name: form.name,
-        slug: form.slug,
-        description: form.description,
-        ownerEmail: form.ownerEmail || undefined,
-      });
-      toast.add({
-        severity: "success",
-        summary: "Thành công",
-        detail: "Đã tạo workspace",
-        life: 3000,
-      });
-    }
-    closeDialog();
-    fetchWorkspaces();
-  } catch (err: any) {
-    toast.add({
-      severity: "error",
-      summary: "Lỗi",
-      detail: err.response?.data?.message ?? "Có lỗi xảy ra",
-      life: 3000,
-    });
-  } finally {
-    submitting.value = false;
-  }
 }
 
 function confirmDelete(ws: any) {
