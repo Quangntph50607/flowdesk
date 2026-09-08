@@ -1,6 +1,7 @@
 package com.example.flowdesk_be.service.impl;
 
 import com.example.flowdesk_be.dto.request.AddMemberRequest;
+import com.example.flowdesk_be.dto.response.MemberGroupResponse;
 import com.example.flowdesk_be.dto.response.MemberResponse;
 import com.example.flowdesk_be.entity.Role;
 import com.example.flowdesk_be.entity.User;
@@ -57,6 +58,94 @@ public class MemberServiceImpl implements MemberService {
         .build();
 
     return MemberResponse.from(memberRepository.save(member));
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<MemberResponse> getAllMembersFlat(Long workspaceId, String requesterEmail) {
+    Workspace parentWs = findWorkspaceOrThrow(workspaceId);
+    if (parentWs.getLevel() != 0) {
+      throw AppException.badRequest("Chỉ hỗ trợ lấy tất cả member từ workspace tổng (level=0)");
+    }
+
+    User requester = findUserOrThrow(requesterEmail);
+    if (!requester.isSuperAdmin()) {
+      assertCanAccessWorkspace(requester, workspaceId);
+    }
+
+    // Lấy danh sách id: workspace tổng + tất cả chi nhánh
+    List<Long> allWorkspaceIds = new java.util.ArrayList<>();
+    allWorkspaceIds.add(workspaceId);
+    workspaceRepository.findAllByParentIdAndIsActiveTrue(workspaceId)
+        .forEach(b -> allWorkspaceIds.add(b.getId()));
+
+    return memberRepository.findAllByWorkspaceIdIn(allWorkspaceIds)
+        .stream()
+        .map(MemberResponse::from)
+        .toList();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<MemberGroupResponse> getAllMembersGrouped(Long workspaceId, String requesterEmail) {
+    List<MemberResponse> flat = getAllMembersFlat(workspaceId, requesterEmail);
+
+    // Group theo userId — giữ thứ tự insert (LinkedHashMap)
+    java.util.Map<Long, MemberGroupResponse> map = new java.util.LinkedHashMap<>();
+
+    for (MemberResponse m : flat) {
+      map.computeIfAbsent(m.getUserId(), uid -> {
+        MemberGroupResponse g = new MemberGroupResponse();
+        g.setUserId(uid);
+        g.setEmail(m.getEmail());
+        g.setFullName(m.getFullName());
+        g.setAvatarUrl(m.getAvatarUrl());
+        g.setMemberships(new java.util.ArrayList<>());
+        return g;
+      });
+
+      MemberGroupResponse g = map.get(m.getUserId());
+      g.getMemberships().add(m);
+
+      // Membership workspace tổng (branchId == null) → dùng làm "account" chính
+      if (m.getBranchId() == null) {
+        g.setRoleCode(m.getRoleCode());
+        g.setRoleName(m.getRoleName());
+        g.setAccountActive(m.getIsActive());
+        g.setWorkspaceMemberId(m.getId());
+        g.setWorkspaceId(m.getWorkspaceId());
+      }
+    }
+
+    // Tính branchLabels cho từng group
+    for (MemberGroupResponse g : map.values()) {
+      java.util.List<String> names = g.getMemberships().stream()
+          .filter(m -> m.getBranchName() != null)
+          .map(MemberResponse::getBranchName)
+          .distinct()
+          .toList();
+
+      if (!names.isEmpty()) {
+        String label = names.size() <= 2
+            ? String.join(", ", names)
+            : String.join(", ", names.subList(0, 2)) + " +" + (names.size() - 2) + "...";
+        g.setBranchLabels(label);
+      }
+
+      // Fallback: nếu user chỉ có trong chi nhánh (không có membership workspace
+      // tổng)
+      // lấy role từ membership đầu tiên
+      if (g.getRoleCode() == null && !g.getMemberships().isEmpty()) {
+        MemberResponse first = g.getMemberships().get(0);
+        g.setRoleCode(first.getRoleCode());
+        g.setRoleName(first.getRoleName());
+        g.setAccountActive(first.getIsActive());
+        g.setWorkspaceMemberId(first.getId());
+        g.setWorkspaceId(first.getWorkspaceId());
+      }
+    }
+
+    return new java.util.ArrayList<>(map.values());
   }
 
   @Override

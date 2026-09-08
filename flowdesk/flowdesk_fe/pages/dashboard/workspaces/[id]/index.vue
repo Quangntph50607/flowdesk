@@ -151,11 +151,15 @@
         </div>
       </template>
       <template #content>
+        <!-- BE trả về grouped — mỗi dòng là 1 user -->
         <DataTable
           :value="allMembers"
           :loading="loadingMembers"
-          data-key="uniqueKey"
+          data-key="userId"
           striped-rows
+          row-hover
+          @row-click="openMemberDetail"
+          style="cursor: pointer"
         >
           <Column header="Thành viên">
             <template #body="{ data }">
@@ -194,13 +198,14 @@
               />
             </template>
           </Column>
-          <Column header="Chi nhánh" style="width: 200px">
+          <!-- Chi nhánh: BE tính sẵn "A, B +1..." -->
+          <Column header="Chi nhánh" style="width: 220px">
             <template #body="{ data }">
               <span
-                v-if="data.branchName"
+                v-if="data.branchLabels"
                 class="text-sm"
                 style="color: #0f172a"
-                >{{ data.branchName }}</span
+                >{{ data.branchLabels }}</span
               >
               <span v-else class="text-xs" style="color: #94a3b8"
                 >— Workspace tổng</span
@@ -210,20 +215,25 @@
           <Column header="Trạng thái" style="width: 150px">
             <template #body="{ data }">
               <Tag
-                :value="data.isActive ? 'Hoạt động' : 'Ngưng hoạt động'"
-                :severity="data.isActive ? 'success' : 'danger'"
+                :value="data.accountActive ? 'Hoạt động' : 'Ngưng hoạt động'"
+                :severity="data.accountActive ? 'success' : 'danger'"
               />
             </template>
           </Column>
-          <Column v-if="canManage" header="Hành động" style="width: 120px">
+          <Column v-if="canManage" header="Hành động" style="width: 130px">
             <template #body="{ data }">
               <div
-                class="flex items-center gap-1"
+                class="flex items-center gap-2"
                 v-if="data.roleCode !== 'OWNER'"
+                @click.stop
               >
+                <!-- Toggle = khoá/mở membership workspace tổng -->
                 <ToggleSwitch
-                  v-model="data.isActive"
-                  @update:model-value="toggleMember(data)"
+                  v-model="data.accountActive"
+                  v-tooltip.top="
+                    data.accountActive ? 'Khoá tài khoản' : 'Mở tài khoản'
+                  "
+                  @update:model-value="toggleAccountActive(data)"
                 />
                 <Button
                   icon="pi pi-trash"
@@ -231,7 +241,7 @@
                   rounded
                   size="small"
                   severity="danger"
-                  v-tooltip.top="'Xóa'"
+                  v-tooltip.top="'Xóa khỏi workspace'"
                   @click="confirmRemoveMember(data)"
                 />
               </div>
@@ -246,6 +256,105 @@
         </DataTable>
       </template>
     </Card>
+
+    <!-- DIALOG CHI TIẾT THÀNH VIÊN -->
+    <Dialog
+      :visible="showMemberDetail"
+      :header="selectedMember?.fullName ?? 'Chi tiết thành viên'"
+      modal
+      style="width: 520px"
+      @update:visible="showMemberDetail = $event"
+    >
+      <div v-if="selectedMember" class="flex flex-col gap-4 pt-2">
+        <div class="flex items-center gap-3">
+          <div
+            class="flex items-center justify-center rounded-full font-bold text-sm shrink-0"
+            style="
+              width: 44px;
+              height: 44px;
+              background-color: #e2e8f0;
+              color: #475569;
+            "
+          >
+            {{ selectedMember.fullName?.charAt(0).toUpperCase() }}
+          </div>
+          <div>
+            <p class="font-semibold text-sm" style="color: #0f172a">
+              {{ selectedMember.fullName }}
+            </p>
+            <p class="text-xs" style="color: #94a3b8">
+              {{ selectedMember.email }}
+            </p>
+          </div>
+        </div>
+
+        <Divider class="!my-1" />
+
+        <div>
+          <p
+            class="text-xs font-semibold uppercase mb-2"
+            style="color: #94a3b8; letter-spacing: 0.05em"
+          >
+            Thành viên tại
+          </p>
+          <div class="flex flex-col gap-2">
+            <div
+              v-for="m in selectedMember.memberships"
+              :key="m.id"
+              class="flex items-center justify-between px-3 py-2 rounded-lg"
+              style="background: #f8fafc; border: 1px solid #e2e8f0"
+            >
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium" style="color: #0f172a">
+                  {{ m.branchName ?? "— Workspace tổng" }}
+                </span>
+                <Tag
+                  :value="m.roleName ?? m.roleCode"
+                  :severity="
+                    m.roleCode === 'OWNER'
+                      ? 'contrast'
+                      : m.roleCode === 'ADMIN'
+                        ? 'warn'
+                        : 'info'
+                  "
+                  class="!text-xs"
+                />
+              </div>
+              <div
+                v-if="canManage && m.roleCode !== 'OWNER'"
+                class="flex items-center gap-2"
+              >
+                <ToggleSwitch
+                  v-model="m.isActive"
+                  v-tooltip.top="m.isActive ? 'Tắt tại đây' : 'Bật tại đây'"
+                  @update:model-value="toggleMembershipActive(m)"
+                />
+              </div>
+              <Tag
+                v-else-if="m.roleCode === 'OWNER'"
+                value="Owner"
+                severity="contrast"
+                class="!text-xs"
+              />
+              <Tag
+                v-else
+                :value="m.isActive ? 'Hoạt động' : 'Tắt'"
+                :severity="m.isActive ? 'success' : 'danger'"
+                class="!text-xs"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <Button
+          label="Đóng"
+          severity="secondary"
+          text
+          @click="showMemberDetail = false"
+        />
+      </template>
+    </Dialog>
 
     <WorkspaceEditDialog
       v-model:visible="showEditWorkspace"
@@ -274,9 +383,8 @@
       :workspace-id="workspaceId"
       :is-owner="!!canManage"
       :branches="branches"
-      :available-users="availableUsersForWorkspace"
+      :all-members="allMembers"
       @added="fetchAllMembers"
-      @filter="handleAvailableUsersFilter"
     />
 
     <ConfirmDialog />
@@ -299,6 +407,8 @@ const workspaceId = computed(() => route.params.id as string);
 
 const workspace = ref<any>(null);
 const branches = ref<any[]>([]);
+// BE trả về grouped: mỗi phần tử = 1 user { userId, fullName, email, roleCode,
+// accountActive, workspaceMemberId, workspaceId, branchLabels, memberships[] }
 const allMembers = ref<any[]>([]);
 const loadingBranches = ref(false);
 const loadingMembers = ref(false);
@@ -370,52 +480,20 @@ function confirmDeleteBranch(branch: any) {
 
 // ── Members ─────────────────────────────────────────────────────────
 const showAddMemberDialog = ref(false);
-const availableUsersForWorkspace = ref<any[]>([]);
-let availableUsersSearchTimer: ReturnType<typeof setTimeout> | undefined;
-
 function openAddMember() {
   showAddMemberDialog.value = true;
-  if (authStore.isSuperAdmin) fetchAvailableUsers();
 }
 
-async function fetchAvailableUsers(search = "") {
-  try {
-    const res = await api.get("/api/admin/users", {
-      params: { search: search.trim() || undefined },
-    });
-    const allUsers: any[] = res.data.data ?? [];
-    const currentIds = new Set(
-      allMembers.value
-        .filter((m: any) => !m.branchName)
-        .map((m: any) => m.userId),
-    );
-    availableUsersForWorkspace.value = allUsers
-      .filter((u: any) => !currentIds.has(u.id))
-      .map((u: any) => ({
-        userId: u.id,
-        fullName: u.fullName,
-        email: u.email,
-      }));
-  } catch {
-    availableUsersForWorkspace.value = [];
-  }
-}
-
-function handleAvailableUsersFilter(search: string) {
-  if (availableUsersSearchTimer) clearTimeout(availableUsersSearchTimer);
-  availableUsersSearchTimer = setTimeout(
-    () => fetchAvailableUsers(search),
-    400,
-  );
-}
-
-async function toggleMember(member: any) {
+// Toggle membership workspace tổng = khoá/mở tài khoản trong workspace
+async function toggleAccountActive(row: any) {
+  if (!row.workspaceMemberId) return;
   try {
     await api.patch(
-      `/api/workspaces/${member.workspaceId}/members/${member.id}/toggle-active`,
+      `/api/workspaces/${row.workspaceId}/members/${row.workspaceMemberId}/toggle-active`,
     );
     fetchAllMembers();
   } catch {
+    row.accountActive = !row.accountActive;
     toast.add({
       severity: "error",
       summary: "Lỗi",
@@ -425,9 +503,28 @@ async function toggleMember(member: any) {
   }
 }
 
-function confirmRemoveMember(member: any) {
+// Toggle membership tại 1 chi nhánh cụ thể (trong dialog chi tiết)
+async function toggleMembershipActive(membership: any) {
+  try {
+    await api.patch(
+      `/api/workspaces/${membership.workspaceId}/members/${membership.id}/toggle-active`,
+    );
+    fetchAllMembers();
+  } catch {
+    membership.isActive = !membership.isActive;
+    toast.add({
+      severity: "error",
+      summary: "Lỗi",
+      detail: "Không thể cập nhật trạng thái",
+      life: 3000,
+    });
+  }
+}
+
+function confirmRemoveMember(row: any) {
+  if (!row.workspaceMemberId) return;
   confirm.require({
-    message: `Xóa "${member.fullName}" khỏi ${member.branchName ?? "workspace tổng"}?`,
+    message: `Xóa "${row.fullName}" khỏi workspace?`,
     header: "Xác nhận",
     icon: "pi pi-exclamation-triangle",
     rejectLabel: "Hủy",
@@ -436,12 +533,12 @@ function confirmRemoveMember(member: any) {
     accept: async () => {
       try {
         await api.delete(
-          `/api/workspaces/${member.workspaceId}/members/${member.id}`,
+          `/api/workspaces/${row.workspaceId}/members/${row.workspaceMemberId}`,
         );
         toast.add({
           severity: "success",
           summary: "Đã xóa",
-          detail: member.fullName,
+          detail: row.fullName,
           life: 3000,
         });
         fetchAllMembers();
@@ -455,6 +552,16 @@ function confirmRemoveMember(member: any) {
       }
     },
   });
+}
+
+// ── Member detail dialog ─────────────────────────────────────────────
+const showMemberDetail = ref(false);
+const selectedMember = ref<any>(null);
+
+function openMemberDetail(event: any) {
+  // Deep copy để thay đổi toggle trong dialog không ảnh hưởng trực tiếp table
+  selectedMember.value = JSON.parse(JSON.stringify(event.data));
+  showMemberDetail.value = true;
 }
 
 // ── Fetch ────────────────────────────────────────────────────────────
@@ -492,43 +599,14 @@ async function fetchBranches() {
   }
 }
 
+// 1 API — BE trả về grouped sẵn
 async function fetchAllMembers() {
   loadingMembers.value = true;
   try {
-    const parentRes = await api.get(
-      `/api/workspaces/${workspaceId.value}/members`,
+    const res = await api.get(
+      `/api/workspaces/${workspaceId.value}/all-members`,
     );
-    const parentMembers = (parentRes.data.data ?? []).map((m: any) => ({
-      ...m,
-      uniqueKey: `parent-${m.id}`,
-      branchName: null,
-    }));
-
-    const branchList: any[] = branches.value.length
-      ? branches.value
-      : await api
-          .get(`/api/workspaces/${workspaceId.value}/branches`)
-          .then((r: any) => r.data.data ?? []);
-
-    const branchMembersArrays = await Promise.all(
-      branchList.map(async (b: any) => {
-        try {
-          const res = await api.get(`/api/workspaces/${b.id}/members`);
-          return (res.data.data ?? []).map((m: any) => ({
-            ...m,
-            uniqueKey: `branch-${b.id}-${m.id}`,
-            branchName: b.name,
-          }));
-        } catch {
-          return [];
-        }
-      }),
-    );
-
-    allMembers.value = [
-      ...parentMembers,
-      ...([] as any[]).concat(...branchMembersArrays),
-    ];
+    allMembers.value = res.data.data ?? [];
   } catch {
     toast.add({
       severity: "error",
@@ -544,8 +622,7 @@ async function fetchAllMembers() {
 onMounted(async () => {
   if (!authStore.currentUser) await authStore.fetchMe();
   await fetchWorkspace();
-  await fetchBranches();
-  await fetchAllMembers();
+  await Promise.all([fetchBranches(), fetchAllMembers()]);
 });
 </script>
 

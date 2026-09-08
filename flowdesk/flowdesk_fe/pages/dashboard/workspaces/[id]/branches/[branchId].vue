@@ -304,6 +304,8 @@ async function fetchBranch() {
   try {
     const res = await api.get(`/api/workspaces/${branchId.value}`);
     branch.value = res.data.data;
+    // parentName được trả thẳng từ WorkspaceResponse.parentName — không cần gọi thêm API
+    parentWorkspaceName.value = res.data.data?.parentName ?? "Workspace tổng";
   } catch {
     toast.add({
       severity: "error",
@@ -311,18 +313,6 @@ async function fetchBranch() {
       detail: "Không thể tải chi nhánh",
       life: 3000,
     });
-  }
-}
-
-async function fetchParentWorkspace() {
-  try {
-    const url = authStore.isSuperAdmin
-      ? `/api/admin/workspaces/${workspaceId.value}`
-      : `/api/workspaces/${workspaceId.value}`;
-    const res = await api.get(url);
-    parentWorkspaceName.value = res.data.data?.name ?? "Workspace tổng";
-  } catch {
-    parentWorkspaceName.value = "Workspace tổng";
   }
 }
 
@@ -345,7 +335,7 @@ async function fetchMembers() {
 
 onMounted(async () => {
   if (!authStore.currentUser) await authStore.fetchMe();
-  await Promise.all([fetchBranch(), fetchParentWorkspace(), fetchMembers()]);
+  await Promise.all([fetchBranch(), fetchMembers()]);
 });
 </script>
 

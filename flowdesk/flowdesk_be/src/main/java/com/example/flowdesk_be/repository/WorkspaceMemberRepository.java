@@ -32,4 +32,17 @@ public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember
 
   // Lấy tất cả workspace memberships active của một user
   List<WorkspaceMember> findAllByUserIdAndIsActiveTrue(Long userId);
+
+  // Lấy tất cả members của nhiều workspace cùng lúc (dùng cho all-members
+  // endpoint)
+  @Query("""
+      select m from WorkspaceMember m
+        join fetch m.user
+        join fetch m.role
+        join fetch m.workspace w
+        left join fetch w.parent
+      where w.id in :workspaceIds
+      order by m.workspace.level asc, m.user.fullName asc
+      """)
+  List<WorkspaceMember> findAllByWorkspaceIdIn(@Param("workspaceIds") List<Long> workspaceIds);
 }

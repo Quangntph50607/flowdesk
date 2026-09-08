@@ -17,6 +17,7 @@ public class WorkspaceResponse {
   private Long ownerId;
   private String ownerName;
   private Long parentId; // null = workspace tổng, non-null = chi nhánh
+  private String parentName; // tên workspace cha (chỉ có khi là chi nhánh)
   private Integer level; // 0 = tổng, 1 = chi nhánh
   private Boolean isActive;
   private LocalDateTime createdAt;
@@ -33,6 +34,7 @@ public class WorkspaceResponse {
     r.ownerId = ws.getOwner() != null ? ws.getOwner().getId() : null;
     r.ownerName = ws.getOwner() != null ? ws.getOwner().getFullName() : null;
     r.parentId = ws.getParent() != null ? ws.getParent().getId() : null;
+    r.parentName = ws.getParent() != null ? ws.getParent().getName() : null;
     r.level = ws.getLevel();
     r.isActive = ws.getIsActive();
     r.createdAt = ws.getCreatedAt();

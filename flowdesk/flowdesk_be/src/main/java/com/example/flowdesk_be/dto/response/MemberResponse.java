@@ -1,6 +1,7 @@
 package com.example.flowdesk_be.dto.response;
 
 import com.example.flowdesk_be.entity.WorkspaceMember;
+import com.example.flowdesk_be.entity.Workspace;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -19,6 +20,8 @@ public class MemberResponse {
   private String roleName;
   private Long workspaceId;
   private String workspaceName;
+  private Long branchId; // null nếu là member của workspace tổng
+  private String branchName; // null nếu là member của workspace tổng
   private Boolean isActive;
   private LocalDateTime joinedAt;
 
@@ -35,6 +38,14 @@ public class MemberResponse {
     r.workspaceName = wm.getWorkspace().getName();
     r.isActive = wm.getIsActive();
     r.joinedAt = wm.getJoinedAt();
+
+    Workspace ws = wm.getWorkspace();
+    if (ws.getLevel() == 1 && ws.getParent() != null) {
+      // member thuộc chi nhánh
+      r.branchId = ws.getId();
+      r.branchName = ws.getName();
+    }
+    // branchId / branchName = null → member thuộc workspace tổng
     return r;
   }
 }
