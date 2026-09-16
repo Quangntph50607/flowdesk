@@ -44,6 +44,8 @@ public class SecurityConfig {
         // (4) Quy định endpoint nào cần auth, endpoint nào không
         .authorizeHttpRequests(auth -> auth
             .requestMatchers("/api/auth/**").permitAll()
+            // WebSocket
+            .requestMatchers("/ws/**").permitAll()
             // Swagger UI
             .requestMatchers(
                 "/swagger-ui/**",
@@ -56,6 +58,7 @@ public class SecurityConfig {
             // Mọi user đã đăng nhập được gọi /api/me và /api/workspaces/**
             .requestMatchers("/api/me/**").authenticated()
             .requestMatchers("/api/workspaces/**").authenticated()
+            .requestMatchers("/api/upload/**").authenticated()
             .anyRequest().authenticated())
 
         // (5) Không dùng session

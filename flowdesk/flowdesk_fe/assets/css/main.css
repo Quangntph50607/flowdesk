@@ -22,7 +22,7 @@
   /* ── Layout shell ── */
   .fd-shell {
     @apply flex min-h-screen;
-    background-color: #eef2f6;
+    background-color: white;
     padding: 12px;
     gap: 12px;
   }
@@ -341,4 +341,53 @@
   pointer-events: none !important;
   height: 0 !important;
   overflow: hidden !important;
+}
+
+/* ── Chat module ── */
+
+/* Override fd-content-shell padding cho trang chat */
+.fd-content-shell:has(.chat-page-root) {
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+/* Scrollbar chat messages */
+.chat-messages-area::-webkit-scrollbar {
+  width: 4px;
+}
+.chat-messages-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-messages-area::-webkit-scrollbar-thumb {
+  background-color: #e2e8f0;
+  border-radius: 9999px;
+}
+.chat-messages-area::-webkit-scrollbar-thumb:hover {
+  background-color: #cbd5e1;
+}
+
+/* Scrollbar conversation list */
+.chat-room-list-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+.chat-room-list-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.chat-room-list-scroll::-webkit-scrollbar-thumb {
+  background-color: #e2e8f0;
+  border-radius: 9999px;
+}
+
+/* Workspace selector card (chat page) */
+.ws-selector-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.ws-selector-card:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
 }

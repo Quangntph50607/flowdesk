@@ -1,0 +1,750 @@
+FLOWDESK – REQUIREMENT MODULE CHAT NỘI BỘ
+
+1. MỤC TIÊU
+
+Module Chat nội bộ dùng để các thành viên trong cùng một Workspace có thể trao đổi trực tiếp với nhau.
+
+Nguyên tắc chính:
+- Chỉ người thuộc cùng một Workspace mới được chat với nhau.
+- Không dùng Branch để giới hạn chat.
+- Người ở khác chi nhánh nhưng cùng Workspace vẫn có thể chat.
+- User thuộc Workspace A không được nhìn thấy, tìm kiếm, chat hoặc tham gia nhóm của Workspace B.
+- Chat nội bộ tách biệt với conversation dùng để trao đổi với Customer.
+- Chat nội bộ hỗ trợ hai loại: chat 1-1 và chat nhóm.
+
+Ví dụ:
+
+Workspace A
+- An
+- Bình
+- Cường
+- Dũng
+
+An có thể:
+- Chat riêng với Bình.
+- Chat riêng với Cường.
+- Tạo nhóm gồm An, Bình, Cường, Dũng.
+
+An không được chat với người chỉ thuộc Workspace B.
+
+
+2. DANH SÁCH THÀNH VIÊN TRONG WORKSPACE
+
+Người dùng có thể xem và tìm kiếm các thành viên trong Workspace hiện tại.
+
+Danh sách hiển thị:
+- Avatar.
+- Họ tên.
+- Có thể hiển thị email hoặc thông tin phụ nếu cần.
+- Trạng thái online/offline có thể bổ sung sau.
+
+Chỉ hiển thị:
+- User đang hoạt động.
+- Thành viên đang hoạt động trong Workspace.
+
+Không hiển thị thành viên thuộc Workspace khác.
+
+Mục đích:
+- Chọn một người để bắt đầu chat riêng.
+- Chọn nhiều người khi tạo group.
+
+
+3. CHAT 1-1
+
+Người dùng có thể chọn một thành viên cùng Workspace để bắt đầu cuộc trò chuyện riêng.
+
+Ví dụ:
+An ↔ Bình
+
+Quy tắc:
+- Hai user phải thuộc cùng Workspace.
+- Không cho user chat với chính mình.
+- Mỗi cặp user trong cùng Workspace chỉ có một cuộc chat DIRECT.
+- Nếu hai người đã từng chat thì mở lại cuộc trò chuyện cũ.
+- Không tạo nhiều cuộc chat riêng trùng nhau giữa cùng hai người.
+
+Luồng:
+An chọn Bình
+→ kiểm tra An và Bình cùng Workspace
+→ kiểm tra đã có cuộc trò chuyện DIRECT chưa
+→ nếu có thì mở lại
+→ nếu chưa có thì tạo mới
+→ bắt đầu gửi tin nhắn.
+
+
+4. DANH SÁCH CUỘC TRÒ CHUYỆN
+
+Người dùng có sidebar/danh sách các cuộc trò chuyện mình đang tham gia.
+
+Mỗi item nên hiển thị:
+- Avatar.
+- Tên người chat hoặc tên group.
+- Tin nhắn mới nhất.
+- Người gửi tin nhắn cuối nếu là group.
+- Thời gian tin nhắn cuối.
+- Số tin chưa đọc.
+- Trạng thái pin nếu có.
+- Loại chat DIRECT hoặc GROUP.
+
+Danh sách được sắp xếp:
+- Cuộc trò chuyện có hoạt động mới nhất nằm trên.
+- Conversation được pin có thể ưu tiên phía trên.
+
+User chỉ nhìn thấy conversation mà mình là thành viên.
+
+
+5. GỬI TIN NHẮN TEXT
+
+Người dùng có thể gửi tin nhắn văn bản.
+
+Tin nhắn cần có:
+- Người gửi.
+- Nội dung.
+- Thời gian gửi.
+- Conversation chứa tin nhắn.
+- Loại tin nhắn.
+
+Tin của current user hiển thị bên phải.
+Tin của người khác hiển thị bên trái.
+
+Không được gửi message vào conversation mà user không phải thành viên.
+
+
+6. TIN NHẮN REALTIME
+
+Khi một user gửi tin nhắn, các thành viên khác của conversation đang online phải nhận được ngay mà không cần tải lại trang.
+
+Ví dụ:
+An gửi: “Hello”
+→ Bình đang mở chat
+→ Bình nhìn thấy “Hello” ngay lập tức.
+
+Khi có message mới:
+- Nếu user đang mở conversation đó thì append message ngay.
+- Nếu user đang ở conversation khác thì cập nhật unread.
+- Sidebar phải cập nhật last message và thời gian.
+- Conversation vừa có message mới được đẩy lên trên.
+
+
+7. LỊCH SỬ TIN NHẮN
+
+Khi mở một conversation, user có thể xem lịch sử message.
+
+Không tải toàn bộ lịch sử một lần.
+
+Ví dụ:
+- Ban đầu tải 30 tin gần nhất.
+- Khi kéo lên trên thì tải thêm 30 tin cũ hơn.
+
+Mục tiêu:
+- Chat dài vẫn hoạt động tốt.
+- Không tải hàng nghìn message cùng lúc.
+
+
+8. TIN CHƯA ĐỌC
+
+Mỗi conversation cần theo dõi user đã đọc đến message nào.
+
+Ví dụ:
+Bình gửi cho An 3 tin.
+An chưa mở conversation.
+
+Sidebar:
+Bình    3
+
+Khi An mở conversation và đọc:
+3 → 0
+
+Unread là theo từng user.
+
+Tin do chính current user gửi không được tính là unread của current user.
+
+
+9. TẠO GROUP CHAT
+
+Một user có thể tạo group chat.
+
+Khi tạo group:
+- Nhập tên nhóm.
+- Avatar nhóm có thể optional.
+- Chọn các thành viên.
+- Các thành viên được chọn phải thuộc cùng Workspace.
+- Người tạo được tự động thêm vào group.
+- Người tạo không cần tự chọn chính mình.
+
+Ví dụ:
+
+Tên nhóm:
+Team Backend
+
+Thành viên:
+- An
+- Bình
+- Cường
+- Dũng
+
+Sau khi tạo:
+Team Backend
+- An
+- Bình
+- Cường
+- Dũng
+
+
+10. TRƯỞNG NHÓM
+
+Người tạo group chính là trưởng nhóm.
+
+Không cần làm hệ thống role OWNER / ADMIN / MEMBER riêng cho group ở phiên bản đầu.
+
+Ví dụ:
+An tạo Team Backend
+→ An = trưởng nhóm.
+
+Trưởng nhóm có quyền:
+- Đổi tên nhóm.
+- Đổi avatar nhóm.
+- Thêm thành viên.
+- Xóa thành viên.
+- Xóa group.
+
+Member thường:
+- Gửi tin.
+- Xem tin.
+- Xem danh sách thành viên.
+- Rời nhóm.
+
+Ở MVP:
+- Trưởng nhóm không được tự rời group.
+- Chưa cần chức năng chuyển trưởng nhóm.
+- Sau này nếu cần mới bổ sung.
+
+
+11. XEM THÔNG TIN GROUP
+
+Mỗi group cần có trang/panel thông tin.
+
+Hiển thị:
+- Tên nhóm.
+- Avatar nhóm.
+- Người tạo.
+- Ngày tạo.
+- Danh sách thành viên.
+
+Ví dụ:
+
+Team Backend
+
+An       Trưởng nhóm
+Bình
+Cường
+Dũng
+
+Tất cả member đều được xem danh sách.
+
+Các thao tác quản lý chỉ hiện nếu current user là trưởng nhóm.
+
+
+12. THÊM THÀNH VIÊN VÀO GROUP
+
+Chỉ trưởng nhóm được thêm thành viên.
+
+Quy tắc:
+- Người được thêm phải thuộc cùng Workspace.
+- Không được thêm user đã có trong group.
+- Khi thêm thành công, user mới bắt đầu nhận được các message mới của group.
+
+Có thể tạo tin hệ thống:
+“An đã thêm Nam vào nhóm.”
+
+
+13. XÓA THÀNH VIÊN KHỎI GROUP
+
+Chỉ trưởng nhóm được xóa member.
+
+Không cho xóa chính trưởng nhóm.
+
+Sau khi bị xóa:
+- User không còn được gửi message.
+- Không nhận message mới.
+- Không còn được truy cập group đang hoạt động.
+
+Có thể tạo tin hệ thống:
+“An đã xóa Bình khỏi nhóm.”
+
+
+14. RỜI GROUP
+
+Member bình thường có thể tự rời group.
+
+Sau khi rời:
+- Không gửi tin mới.
+- Không nhận tin mới.
+- Không truy cập group đang hoạt động.
+
+Có thể tạo tin hệ thống:
+“Bình đã rời nhóm.”
+
+Ở MVP:
+- Trưởng nhóm không được tự rời group.
+- Chưa cần chuyển quyền trưởng nhóm.
+
+
+15. ĐỔI TÊN GROUP
+
+Chỉ trưởng nhóm được đổi tên.
+
+Ví dụ:
+Team Backend
+→ Backend FlowDesk
+
+Có thể tạo tin hệ thống:
+“An đã đổi tên nhóm thành Backend FlowDesk.”
+
+
+16. AVATAR GROUP
+
+Group có thể có avatar.
+
+Nếu chưa có avatar:
+- Hiển thị avatar mặc định.
+- Hoặc dùng ký tự đầu của tên nhóm.
+
+Chỉ trưởng nhóm được thay đổi avatar.
+
+
+17. REPLY MESSAGE
+
+User có thể trả lời một message cụ thể.
+
+Ví dụ:
+
+Bình:
+“Mai họp 9h nhé.”
+
+An reply:
+“Mai họp 9h nhé.”
+→ “Ok anh.”
+
+Reply cần hiển thị preview:
+- Người gửi message gốc.
+- Một phần nội dung message gốc.
+
+Message được reply phải thuộc cùng conversation.
+
+
+18. SỬA MESSAGE
+
+Người gửi được phép sửa message của chính mình.
+
+Ví dụ:
+“Mai họp 8h”
+→ sửa thành:
+“Mai họp 9h”
+
+Sau khi sửa cần hiển thị:
+“đã chỉnh sửa”
+
+Không cho user sửa message của người khác.
+
+Không cho sửa SYSTEM message.
+
+
+19. THU HỒI MESSAGE
+
+Người gửi được thu hồi message của chính mình.
+
+Sau khi thu hồi:
+- Không hiển thị nội dung cũ trên UI.
+- Hiển thị:
+“Tin nhắn đã được thu hồi.”
+
+Không cho user khác thu hồi tin.
+
+Ở MVP, trưởng nhóm cũng không cần quyền xóa message của member khác.
+
+
+20. GỬI ẢNH
+
+Người dùng có thể gửi ảnh.
+
+Ví dụ:
+- JPG
+- PNG
+- WEBP
+
+Trong UI:
+- Hiển thị preview ảnh.
+- Có thể click xem ảnh lớn.
+
+Một message có thể có một hoặc nhiều attachment nếu thiết kế hỗ trợ.
+
+
+21. GỬI FILE
+
+Người dùng có thể gửi file.
+
+Ví dụ:
+- PDF.
+- Word.
+- Excel.
+- File thông thường theo giới hạn hệ thống.
+
+UI nên hiển thị:
+- Tên file.
+- Kích thước.
+- Icon loại file.
+- Hành động xem hoặc tải.
+
+
+22. SYSTEM MESSAGE
+
+Hệ thống có loại tin nhắn riêng dùng cho các sự kiện trong group.
+
+Ví dụ:
+- “An đã tạo nhóm.”
+- “An đã thêm Bình vào nhóm.”
+- “Cường đã rời nhóm.”
+- “An đã đổi tên nhóm.”
+- “An đã xóa Dũng khỏi nhóm.”
+
+SYSTEM message không phải tin do user nhập.
+
+
+23. TÌM KIẾM CONVERSATION
+
+Sidebar có ô tìm kiếm.
+
+Có thể tìm:
+- Tên người trong DIRECT.
+- Tên group.
+
+Ví dụ:
+Search: Bình
+→ hiển thị cuộc chat với Bình.
+
+
+24. TÌM KIẾM MESSAGE
+
+Trong một conversation có thể tìm message theo từ khóa.
+
+Ví dụ:
+Search:
+“hợp đồng”
+
+Kết quả:
+- “Anh gửi hợp đồng nhé.”
+- “Hợp đồng đã cập nhật.”
+
+Chỉ tìm trong conversation current user được phép truy cập.
+
+Chức năng này có thể làm sau core chat.
+
+
+25. PIN CONVERSATION
+
+Mỗi user được pin conversation riêng.
+
+Ví dụ:
+- Team Backend.
+- Sếp.
+
+Pin của An không ảnh hưởng pin của Bình.
+
+Conversation được pin có thể nằm phía trên sidebar.
+
+
+26. MUTE CONVERSATION
+
+User có thể tắt thông báo một conversation.
+
+Mute là riêng từng user.
+
+Mute không làm user rời group.
+
+User vẫn:
+- Nhận dữ liệu.
+- Xem message.
+- Gửi message.
+
+Chỉ không nhận thông báo theo cách hệ thống định nghĩa.
+
+
+27. TYPING
+
+Hiển thị trạng thái đang nhập.
+
+Ví dụ:
+“Bình đang nhập...”
+
+Typing:
+- Chỉ là trạng thái tạm thời.
+- Không cần lưu lịch sử.
+- Chỉ gửi cho các member khác trong conversation.
+
+
+28. ONLINE / OFFLINE
+
+Có thể hiển thị trạng thái:
+
+Bình
+● Online
+
+Hoặc:
+“Hoạt động 5 phút trước.”
+
+Chức năng này không bắt buộc ở core đầu tiên.
+
+Có thể bổ sung sau khi chat cơ bản hoạt động ổn.
+
+
+29. QUYỀN TRUY CẬP CONVERSATION
+
+Rule bắt buộc:
+
+User chỉ được:
+- Xem conversation nếu đang là member.
+- Đọc message nếu đang là member.
+- Gửi message nếu đang là member.
+- Reply/Edit/Recall trên dữ liệu mà user có quyền.
+- Nhận realtime event của conversation mình tham gia.
+
+Ví dụ:
+An không thuộc conversation 100
+→ An không được mở conversation 100 chỉ bằng cách biết ID.
+
+
+30. WORKSPACE ISOLATION
+
+Đây là rule quan trọng nhất.
+
+Ví dụ:
+
+Workspace A:
+- An
+- Bình
+
+Workspace B:
+- Nam
+- Hùng
+
+Không cho:
+An → Nam
+
+Không cho:
+An thêm Nam vào group Workspace A.
+
+Không cho:
+An xem conversation Workspace B.
+
+Không cho:
+An nhận message realtime Workspace B.
+
+Mọi chat đều phải nằm trong phạm vi Workspace.
+
+
+31. CHAT GIỮA CÁC CHI NHÁNH
+
+Branch không dùng để khóa chat.
+
+Ví dụ:
+
+Workspace ABC
+
+Branch Hà Nội:
+- An
+
+Branch HCM:
+- Bình
+
+An vẫn được chat với Bình vì:
+An và Bình cùng Workspace ABC.
+
+Branch chỉ phục vụ các nghiệp vụ khác nếu cần, không phải giới hạn chat nội bộ.
+
+
+32. XÓA GROUP
+
+Chỉ trưởng nhóm được xóa group.
+
+Khi group bị xóa:
+- Group không còn hoạt động.
+- Member không gửi thêm message.
+- Có thể giữ lịch sử trong hệ thống nếu muốn.
+- Không nên xóa toàn bộ lịch sử ngay lập tức nếu còn nhu cầu audit.
+
+
+33. LUỒNG CHAT 1-1
+
+An chọn Bình
+→ kiểm tra cùng Workspace
+→ kiểm tra đã có DIRECT conversation chưa
+→ nếu có thì mở conversation cũ
+→ nếu chưa có thì tạo mới
+→ load lịch sử message
+→ An gửi message
+→ lưu message
+→ Bình nhận realtime
+→ cập nhật conversation list
+→ cập nhật unread nếu Bình chưa mở conversation.
+
+
+34. LUỒNG TẠO GROUP
+
+An chọn “Tạo nhóm”
+→ nhập tên nhóm
+→ chọn Bình + Cường + Dũng
+→ kiểm tra tất cả cùng Workspace
+→ tạo group
+→ tự thêm An
+→ An được xác định là trưởng nhóm
+→ thêm các member đã chọn
+→ tạo system message “An đã tạo nhóm”
+→ mở group chat
+→ các member nhìn thấy group trong conversation list.
+
+
+35. LUỒNG GỬI MESSAGE
+
+User nhập message
+→ kiểm tra user thuộc conversation
+→ kiểm tra conversation còn hoạt động
+→ lưu message
+→ cập nhật last message của conversation
+→ gửi realtime cho các member
+→ cập nhật sidebar
+→ cập nhật unread cho member chưa đọc.
+
+
+36. LUỒNG ĐỌC MESSAGE
+
+User mở conversation
+→ tải message
+→ đánh dấu user đã đọc đến message mới nhất phù hợp
+→ unread về 0
+→ có thể phát sự kiện “đã đọc” cho các member khác nếu UI cần.
+
+
+37. CÁC CHỨC NĂNG CORE BẮT BUỘC
+
+Phiên bản đầu phải có:
+
+1. Xem thành viên cùng Workspace.
+2. Tìm thành viên.
+3. Chat 1-1.
+4. Không tạo trùng DIRECT conversation.
+5. Danh sách conversation.
+6. Last message.
+7. Gửi text message.
+8. Nhận message realtime.
+9. Lịch sử message.
+10. Phân trang lịch sử message.
+11. Unread count.
+12. Mark read.
+13. Tạo group.
+14. Người tạo là trưởng nhóm.
+15. Xem member group.
+16. Thêm member.
+17. Xóa member.
+18. Member rời group.
+19. Đổi tên group.
+20. Quyền truy cập conversation.
+21. Workspace isolation.
+
+
+38. CHỨC NĂNG NÊN CÓ SAU CORE
+
+Sau khi core hoạt động ổn mới làm:
+
+1. Reply message.
+2. Thu hồi message.
+3. Edit message.
+4. Gửi ảnh.
+5. Gửi file.
+6. Avatar group.
+7. Pin conversation.
+8. Mute conversation.
+9. Typing.
+10. Online/offline.
+11. Search conversation.
+12. Search message.
+
+
+39. CHỨC NĂNG CHƯA CẦN Ở MVP
+
+Chưa cần:
+- Reaction emoji.
+- Forward message.
+- Voice message.
+- Voice call.
+- Video call.
+- Poll.
+- Story.
+- Thread.
+- Scheduled message.
+- Disappearing message.
+- Nhiều admin group.
+- Chuyển trưởng nhóm.
+- Phân quyền group phức tạp.
+- End-to-end encryption.
+- Các tính năng kiểu mạng xã hội.
+
+
+40. PHẠM VI MVP NÊN CHỐT
+
+MVP Chat nội bộ FlowDesk nên hoàn thành tối thiểu:
+
+- Thành viên cùng Workspace.
+- Chat 1-1.
+- Danh sách conversation.
+- Text message.
+- Realtime.
+- Message history.
+- Pagination.
+- Unread.
+- Mark read.
+- Tạo group.
+- Người tạo là trưởng nhóm.
+- Danh sách thành viên nhóm.
+- Thêm thành viên.
+- Xóa thành viên.
+- Rời nhóm.
+- Đổi tên nhóm.
+- Reply.
+- Thu hồi message.
+
+Sau khi các phần trên hoạt động ổn mới tiếp tục:
+- Image.
+- File.
+- Edit.
+- Avatar group.
+- Pin.
+- Mute.
+- Typing.
+- Online/offline.
+- Search message.
+
+
+41. KẾT LUẬN NGHIỆP VỤ
+
+Module Chat nội bộ của FlowDesk là một hệ thống nhắn tin dành cho thành viên trong cùng Workspace.
+
+Có hai loại conversation:
+- DIRECT: chat 1-1.
+- GROUP: chat nhóm.
+
+Các nguyên tắc cốt lõi:
+
+- Workspace là ranh giới chat.
+- User khác Workspace không được tương tác.
+- Branch không giới hạn chat.
+- DIRECT không được tạo trùng.
+- User chỉ truy cập conversation mình tham gia.
+- Người tạo group là trưởng nhóm.
+- Không cần role group phức tạp ở MVP.
+- Realtime dùng để cập nhật message ngay lập tức.
+- Lịch sử phải phân trang.
+- Unread là theo từng user.
+- Các chức năng nâng cao chỉ làm sau khi core ổn định.
+
+Mục tiêu đầu tiên là tạo được một module chat đơn giản, dễ hiểu, đủ dùng thật và dễ mở rộng về sau mà không làm quá phức tạp ngay từ đầu.

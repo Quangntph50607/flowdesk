@@ -26,8 +26,31 @@
             'fd-nav-item',
             isActive(item.to) ? 'fd-nav-item--active' : '',
           ]"
+          style="position: relative"
         >
           <i :class="item.icon" style="font-size: 16px" />
+          <!-- Unread badge (chat) -->
+          <span
+            v-if="item.badge && item.badge > 0"
+            style="
+              position: absolute;
+              top: 4px;
+              right: 4px;
+              min-width: 16px;
+              height: 16px;
+              background: #ef4444;
+              color: #fff;
+              border-radius: 9999px;
+              font-size: 9px;
+              font-weight: 700;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              padding: 0 3px;
+              line-height: 1;
+            "
+            >{{ item.badge > 99 ? "99+" : item.badge }}</span
+          >
         </NuxtLink>
       </nav>
 
@@ -124,19 +147,33 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref, onMounted } from "vue";
+import { useRoute } from "vue-router";
+import { useAuthStore } from "../stores/auth";
+import { useChatStore } from "../stores/chat";
+
 const authStore = useAuthStore();
+const chatStore = useChatStore();
 const route = useRoute();
 const userMenu = ref();
 
 const navItems = computed(() => {
-  const items = [
+  const items: { to: string; label: string; icon: string; badge?: number }[] = [
     { to: "/dashboard", label: "Dashboard", icon: "pi pi-home" },
     {
       to: "/dashboard/workspaces",
       label: "Workspaces",
       icon: "pi pi-briefcase",
     },
+    // Chat — route cố định, page tự resolve workspaceId
+    {
+      to: "/dashboard/chat",
+      label: "Chat nội bộ",
+      icon: "pi pi-comments",
+      badge: chatStore.unreadTotal > 0 ? chatStore.unreadTotal : undefined,
+    },
   ];
+
   if (authStore.isSuperAdmin) {
     items.push({ to: "/dashboard/users", label: "Users", icon: "pi pi-users" });
   }
