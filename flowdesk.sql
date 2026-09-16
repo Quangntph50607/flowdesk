@@ -116,6 +116,61 @@ CREATE INDEX IX_wm_workspace          ON workspace_members(workspace_id);
 CREATE INDEX IX_wm_user               ON workspace_members(user_id);
 GO
 
+CREATE TABLE chat_rooms (
+    id           BIGINT        IDENTITY(1,1) PRIMARY KEY,
+    workspace_id BIGINT        NOT NULL,
+    type         NVARCHAR(10)  NOT NULL,
+    name         NVARCHAR(150) NULL,
+    created_by   BIGINT        NOT NULL,
+    is_active    BIT           NOT NULL DEFAULT 1,
+    created_at   DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+    updated_at   DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+
+    CONSTRAINT FK_cr_workspace  FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
+    CONSTRAINT FK_cr_created_by FOREIGN KEY (created_by)   REFERENCES users(id),
+    CONSTRAINT CHK_cr_type      CHECK (type IN ('DIRECT', 'GROUP'))
+);
+GO
+
+CREATE TABLE chat_room_members (
+    id           BIGINT    IDENTITY(1,1) PRIMARY KEY,
+    room_id      BIGINT    NOT NULL,
+    user_id      BIGINT    NOT NULL,
+    is_owner     BIT       NOT NULL DEFAULT 0,
+    is_active    BIT       NOT NULL DEFAULT 1,
+    joined_at    DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    last_read_at DATETIME2 NULL,
+
+    CONSTRAINT FK_crm_room FOREIGN KEY (room_id) REFERENCES chat_rooms(id),
+    CONSTRAINT FK_crm_user FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT UQ_crm      UNIQUE (room_id, user_id)
+);
+GO
+
+CREATE TABLE chat_messages (
+    id          BIGINT         IDENTITY(1,1) PRIMARY KEY,
+    room_id     BIGINT         NOT NULL,
+    sender_id   BIGINT         NOT NULL,
+    type        NVARCHAR(20)   NOT NULL DEFAULT 'TEXT',
+    content     NVARCHAR(MAX)  NULL,
+    is_recalled BIT            NOT NULL DEFAULT 0,
+    is_edited   BIT            NOT NULL DEFAULT 0,
+    created_at  DATETIME2      NOT NULL DEFAULT SYSDATETIME(),
+    updated_at  DATETIME2      NOT NULL DEFAULT SYSDATETIME(),
+
+    CONSTRAINT FK_cm_room   FOREIGN KEY (room_id)   REFERENCES chat_rooms(id),
+    CONSTRAINT FK_cm_sender FOREIGN KEY (sender_id) REFERENCES users(id),
+    CONSTRAINT CHK_cm_type  CHECK (type IN ('TEXT', 'SYSTEM'))
+);
+GO
+
+CREATE INDEX IX_cr_workspace  ON chat_rooms(workspace_id);
+CREATE INDEX IX_crm_room      ON chat_room_members(room_id);
+CREATE INDEX IX_crm_user      ON chat_room_members(user_id);
+CREATE INDEX IX_cm_room_time  ON chat_messages(room_id, created_at DESC);
+GO
+
+
 -- ============================================================
 -- Seed Data
 -- ============================================================

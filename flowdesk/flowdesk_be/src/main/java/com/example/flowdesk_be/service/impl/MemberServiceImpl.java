@@ -63,20 +63,29 @@ public class MemberServiceImpl implements MemberService {
   @Override
   @Transactional(readOnly = true)
   public List<MemberResponse> getAllMembersFlat(Long workspaceId, String requesterEmail) {
-    Workspace parentWs = findWorkspaceOrThrow(workspaceId);
-    if (parentWs.getLevel() != 0) {
-      throw AppException.badRequest("Chỉ hỗ trợ lấy tất cả member từ workspace tổng (level=0)");
+    Workspace ws = findWorkspaceOrThrow(workspaceId);
+
+    // Nếu là workspace con, resolve lên workspace cha
+    Long parentWorkspaceId;
+    if (ws.getLevel() != 0) {
+      if (ws.getParent() == null) {
+        throw AppException.badRequest("Workspace con không có workspace cha");
+      }
+      parentWorkspaceId = ws.getParent().getId();
+    } else {
+      parentWorkspaceId = workspaceId;
     }
 
     User requester = findUserOrThrow(requesterEmail);
     if (!requester.isSuperAdmin()) {
-      assertCanAccessWorkspace(requester, workspaceId);
+      // Check quyền truy cập: workspace cha hoặc bất kỳ workspace con nào
+      assertCanAccessWorkspace(requester, parentWorkspaceId);
     }
 
     // Lấy danh sách id: workspace tổng + tất cả chi nhánh
     List<Long> allWorkspaceIds = new java.util.ArrayList<>();
-    allWorkspaceIds.add(workspaceId);
-    workspaceRepository.findAllByParentIdAndIsActiveTrue(workspaceId)
+    allWorkspaceIds.add(parentWorkspaceId);
+    workspaceRepository.findAllByParentIdAndIsActiveTrue(parentWorkspaceId)
         .forEach(b -> allWorkspaceIds.add(b.getId()));
 
     return memberRepository.findAllByWorkspaceIdIn(allWorkspaceIds)
@@ -303,6 +312,15 @@ public class MemberServiceImpl implements MemberService {
     if (workspace.getLevel() == 1 && workspace.getParent() != null) {
       if (memberRepository.existsByWorkspaceIdAndUserId(
           workspace.getParent().getId(), user.getId()))
+        return;
+    }
+
+    // Hoặc là member của bất kỳ workspace con nào (nhân viên chi nhánh truy cập
+    // workspace cha)
+    if (workspace.getLevel() == 0) {
+      boolean isChildMember = workspace.getChildren().stream()
+          .anyMatch(child -> memberRepository.existsByWorkspaceIdAndUserId(child.getId(), user.getId()));
+      if (isChildMember)
         return;
     }
 
