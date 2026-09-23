@@ -141,16 +141,15 @@
             @send="handleSend"
             @send-file="handleSendFile"
             @load-more="handleLoadMore"
-            @toggle-info="showGroupInfo = !showGroupInfo"
+            @toggle-info="handleToggleInfo"
           />
         </div>
 
-        <!-- Inline info panel (GROUP only) -->
+        <!-- Inline info panel -->
         <Transition name="slide-info">
           <ChatGroupInfoPanel
             v-if="
               showGroupInfo &&
-              chatStore.activeRoom?.type === 'GROUP' &&
               chatStore.activeRoom
             "
             :room="chatStore.activeRoom"
@@ -452,7 +451,7 @@ async function openRoom(roomId: number) {
 
   if (!chatStore.messages[roomId]) await loadMessages(roomId, 0, true);
 
-  if (chatStore.activeRoom?.type === "GROUP") await loadGroupMembers(roomId);
+  await loadGroupMembers(roomId);
 
   try {
     await api.post(`/api/workspaces/${wsId()}/chat/rooms/${roomId}/read`);
@@ -487,6 +486,14 @@ function handleSendFile(
 ) {
   if (!chatStore.activeRoomId) return;
   sendWsFile(chatStore.activeRoomId, fileUrl, fileType, fileName, fileSize);
+}
+
+async function handleToggleInfo() {
+  const roomId = chatStore.activeRoomId;
+  showGroupInfo.value = !showGroupInfo.value;
+  if (showGroupInfo.value && roomId) {
+    await loadGroupMembers(roomId);
+  }
 }
 
 function onRealtimeMessage(msg: any) {
