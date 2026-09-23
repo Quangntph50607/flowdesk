@@ -17,7 +17,7 @@
 
       <!-- Name -->
       <div
-        v-if="room.isOwner && editingName"
+        v-if="canManageGroup && editingName"
         class="flex items-center gap-1 mt-3"
       >
         <input
@@ -46,7 +46,7 @@
           room.name
         }}</span>
         <button
-          v-if="room.isOwner"
+          v-if="canManageGroup"
           class="w-6 h-6 rounded-full flex items-center justify-center hover:bg-slate-100"
           @click="startEditName"
         >
@@ -55,7 +55,7 @@
       </div>
       <p class="text-[11px] text-slate-400 mt-0.5">
         {{
-          room.type === "GROUP" ? `${memberCount} thành viên` : "Trực tiếp"
+          room.type === "GROUP" ? `${memberCount} thành viên` : "Chat riêng"
         }}
       </p>
 
@@ -98,14 +98,39 @@
     </div>
 
     <!-- Members section -->
-    <div class="flex flex-col shrink-0 px-5 pt-4">
+    <div
+      v-if="room.type === 'DIRECT'"
+      class="flex flex-col shrink-0 px-5 pt-4 border-t border-slate-100"
+    >
+      <span
+        class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2"
+        >Thông tin</span
+      >
+      <div class="flex items-center gap-2.5 px-2 py-2 rounded-xl bg-slate-50">
+        <div
+          class="w-8 h-8 rounded-full bg-gradient-to-br from-slate-700 to-slate-500 text-white text-[11px] font-bold flex items-center justify-center shrink-0"
+        >
+          {{ directPeer?.avatarInitial ?? room.avatarInitial }}
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[13px] font-medium text-slate-900 truncate">
+            {{ directPeer?.fullName ?? room.name }}
+          </p>
+          <p class="text-[11px] text-slate-400 truncate">
+            {{ directPeer?.email ?? "Thành viên workspace" }}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="flex flex-col shrink-0 px-5 pt-4">
       <div class="flex items-center justify-between mb-2 shrink-0">
         <span
           class="text-[11px] font-bold uppercase tracking-widest text-slate-400"
           >Members</span
         >
         <button
-          v-if="room.isOwner"
+          v-if="canManageGroup"
           class="text-[11px] font-semibold text-slate-500 hover:text-slate-700 px-2 py-0.5 rounded-md hover:bg-slate-100 transition-colors"
           @click="$emit('openAddMember')"
         >
@@ -139,7 +164,7 @@
             </p>
           </div>
           <button
-            v-if="room.isOwner && !m.isOwner && m.userId !== currentUserId"
+            v-if="canManageGroup && !m.isOwner && m.userId !== currentUserId"
             class="w-6 h-6 rounded-full flex items-center justify-center hover:bg-slate-100 transition-colors shrink-0"
             v-tooltip.left="'Xóa khỏi nhóm'"
             @click="$emit('removeMember', m.userId)"
@@ -260,9 +285,12 @@
     </div>
 
     <!-- Danger zone -->
-    <div class="px-5 py-4 border-t border-slate-100 shrink-0">
+    <div
+      v-if="room.type === 'GROUP'"
+      class="px-5 py-4 border-t border-slate-100 shrink-0"
+    >
       <button
-        v-if="!room.isOwner"
+        v-if="room.type === 'GROUP' && !room.isOwner"
         class="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-red-500 text-[13px] font-semibold hover:bg-red-50 transition-colors disabled:opacity-50 border border-red-100"
         :disabled="leaving"
         @click="$emit('leaveRoom')"
@@ -271,7 +299,7 @@
         {{ leaving ? "Đang rời..." : "Rời nhóm" }}
       </button>
       <button
-        v-if="room.isOwner"
+        v-if="canManageGroup"
         class="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-red-500 text-[13px] font-semibold hover:bg-red-50 transition-colors border border-red-100"
         @click="$emit('deleteRoom')"
       >
@@ -289,6 +317,8 @@ import type { ChatLinkItem, ChatMessage, ChatRoom } from "~/types/chat";
 interface GroupMember {
   userId: number;
   fullName: string;
+  email?: string | null;
+  avatarInitial?: string | null;
   isOwner: boolean;
 }
 
@@ -316,6 +346,12 @@ const newName = ref("");
 const notifOn = ref(true);
 const soundOn = ref(false);
 const activeSharedTab = ref<"media" | "link" | "docs">("media");
+const canManageGroup = computed(
+  () => props.room.type === "GROUP" && props.room.isOwner,
+);
+const directPeer = computed(
+  () => props.members.find((m) => m.userId !== props.currentUserId) ?? null,
+);
 
 const sharedTabs = [
   { key: "media", label: "Media" },

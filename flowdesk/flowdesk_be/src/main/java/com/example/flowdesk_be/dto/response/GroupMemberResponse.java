@@ -10,6 +10,7 @@ public class GroupMemberResponse {
 
   private Long userId;
   private String fullName;
+  private String email;
   private String avatarInitial;
   private boolean isOwner;
 
@@ -18,6 +19,7 @@ public class GroupMemberResponse {
     return GroupMemberResponse.builder()
         .userId(m.getUser().getId())
         .fullName(name)
+        .email(m.getUser().getEmail())
         .avatarInitial(name != null && !name.isEmpty()
             ? String.valueOf(name.charAt(0)).toUpperCase()
             : "?")
