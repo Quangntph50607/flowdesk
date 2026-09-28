@@ -6,32 +6,59 @@
       breadcrumb="Workspaces"
       back
     >
-      <Button
-        v-if="canManage"
-        label="Sửa"
-        icon="pi pi-pencil"
-        severity="secondary"
-        outlined
-        size="small"
-        @click="openEditWorkspace"
-      />
+      <div class="flex gap-2">
+        <Button
+          v-if="canManage"
+          label="Sửa"
+          icon="pi pi-pencil"
+          severity="secondary"
+          outlined
+          size="small"
+          @click="openEditWorkspace"
+        />
+        <Button
+          label="Khách hàng"
+          icon="pi pi-users"
+          severity="secondary"
+          outlined
+          size="small"
+          @click="navigateTo(`/dashboard/customers`)"
+        />
+      </div>
     </AppPageHeader>
 
     <!-- Info row -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6" v-if="workspace">
-      <div class="fd-info-card">
-        <span class="fd-info-label">Chủ sở hữu</span>
-        <span class="fd-info-value">{{ workspace.ownerName ?? "—" }}</span>
+      <div
+        class="flex flex-col gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4"
+      >
+        <span
+          class="text-xs font-medium uppercase tracking-wider text-slate-400"
+          >Chủ sở hữu</span
+        >
+        <span class="flex items-center text-sm font-semibold text-slate-900">{{
+          workspace.ownerName ?? "—"
+        }}</span>
       </div>
-      <div class="fd-info-card">
-        <span class="fd-info-label">Cấp độ</span>
-        <span class="fd-info-value"
+      <div
+        class="flex flex-col gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4"
+      >
+        <span
+          class="text-xs font-medium uppercase tracking-wider text-slate-400"
+          >Cấp độ</span
+        >
+        <span class="flex items-center text-sm font-semibold text-slate-900"
           ><Tag value="Workspace tổng" severity="info"
         /></span>
       </div>
-      <div class="fd-info-card">
-        <span class="fd-info-label">Trạng thái</span>
-        <span class="fd-info-value">
+      <div
+        class="flex flex-col gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4"
+      >
+        <span
+          class="text-xs font-medium uppercase tracking-wider text-slate-400"
+          >Trạng thái</span
+        >
+        <span class="flex items-center text-sm font-semibold text-slate-900">
           <Tag
             :value="workspace.isActive ? 'Hoạt động' : 'Đã tắt'"
             :severity="workspace.isActive ? 'success' : 'secondary'"
@@ -386,22 +413,18 @@
       :all-members="allMembers"
       @added="fetchAllMembers"
     />
-
-    <ConfirmDialog />
   </div>
 </template>
 
 <script setup lang="ts">
-import { useConfirm } from "primevue/useconfirm";
-import { useToast } from "primevue/usetoast";
 
 definePageMeta({ middleware: "auth" });
 
 const route = useRoute();
 const api = useApi();
 const authStore = useAuthStore();
-const confirm = useConfirm();
-const toast = useToast();
+const confirm = useAppConfirm();
+const toast = useAppToast();
 
 const workspaceId = computed(() => route.params.id as string);
 
@@ -625,29 +648,3 @@ onMounted(async () => {
   await Promise.all([fetchBranches(), fetchAllMembers()]);
 });
 </script>
-
-<style scoped>
-.fd-info-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px 20px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-}
-.fd-info-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.fd-info-value {
-  font-size: 14px;
-  font-weight: 600;
-  color: #0f172a;
-  display: flex;
-  align-items: center;
-}
-</style>

@@ -3,11 +3,13 @@ package com.example.flowdesk_be.service.impl;
 import com.example.flowdesk_be.dto.request.CreateWorkspaceRequest;
 import com.example.flowdesk_be.dto.request.UpdateWorkspaceRequest;
 import com.example.flowdesk_be.dto.response.WorkspaceResponse;
+import com.example.flowdesk_be.entity.CustomerTag;
 import com.example.flowdesk_be.entity.User;
 import com.example.flowdesk_be.entity.Workspace;
 import com.example.flowdesk_be.entity.WorkspaceMember;
 import com.example.flowdesk_be.entity.Role;
 import com.example.flowdesk_be.exception.AppException;
+import com.example.flowdesk_be.repository.CustomerTagRepository;
 import com.example.flowdesk_be.repository.RoleRepository;
 import com.example.flowdesk_be.repository.UserRepository;
 import com.example.flowdesk_be.repository.WorkspaceMemberRepository;
@@ -28,6 +30,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
   private final UserRepository userRepository;
 
   private final RoleRepository roleRepository;
+  private final CustomerTagRepository customerTagRepository;
 
   // ================================================================
   // SUPER_ADMIN — Workspace tổng (level = 0)
@@ -69,6 +72,7 @@ public class WorkspaceServiceImpl implements WorkspaceService {
         .isActive(true)
         .build();
     memberRepository.save(member);
+    createDefaultCustomerTags(workspace);
 
     return WorkspaceResponse.from(workspace);
   }
@@ -255,5 +259,18 @@ public class WorkspaceServiceImpl implements WorkspaceService {
             && (m.getRole().getCode().equals("OWNER")
                 || m.getRole().getCode().equals("ADMIN")))
         .orElseThrow(() -> AppException.forbidden("Bạn không có quyền thực hiện thao tác này"));
+  }
+
+  private void createDefaultCustomerTags(Workspace workspace) {
+    List<CustomerTag> tags = List.of(
+        CustomerTag.builder().workspace(workspace).name("VIP").color("#f59e0b").build(),
+        CustomerTag.builder().workspace(workspace).name("Khách mới").color("#2563eb").build(),
+        CustomerTag.builder().workspace(workspace).name("Cần gọi lại").color("#dc2626").build(),
+        CustomerTag.builder().workspace(workspace).name("Đã báo giá").color("#7c3aed").build(),
+        CustomerTag.builder().workspace(workspace).name("Đã mua").color("#16a34a").build(),
+        CustomerTag.builder().workspace(workspace).name("Tiềm năng").color("#0891b2").build(),
+        CustomerTag.builder().workspace(workspace).name("Khó chốt").color("#64748b").build(),
+        CustomerTag.builder().workspace(workspace).name("Ưu tiên cao").color("#e11d48").build());
+    customerTagRepository.saveAll(tags);
   }
 }

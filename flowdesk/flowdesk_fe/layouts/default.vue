@@ -159,24 +159,37 @@ const userMenu = ref();
 
 const navItems = computed(() => {
   const items: { to: string; label: string; icon: string; badge?: number }[] = [
-    { to: "/dashboard", label: "Dashboard", icon: "pi pi-home" },
+    {
+      to: "/dashboard",
+      label: "Dashboard",
+      icon: "fa-solid fa-house",
+    },
     {
       to: "/dashboard/workspaces",
       label: "Workspaces",
-      icon: "pi pi-briefcase",
+      icon: "fa-solid fa-briefcase",
     },
-    // Chat — route cố định, page tự resolve workspaceId
+    {
+      to: "/dashboard/customers",
+      label: "Khách hàng",
+      icon: "fa-solid fa-users",
+    },
     {
       to: "/dashboard/chat",
-      label: "Chat nội bộ",
-      icon: "pi pi-comments",
+      label: "Chat",
+      icon: "fa-solid fa-comments",
       badge: chatStore.unreadTotal > 0 ? chatStore.unreadTotal : undefined,
     },
   ];
 
   if (authStore.isSuperAdmin) {
-    items.push({ to: "/dashboard/users", label: "Users", icon: "pi pi-users" });
+    items.push({
+      to: "/dashboard/users",
+      label: "Users",
+      icon: "fa-solid fa-user-gear",
+    });
   }
+
   return items;
 });
 
@@ -198,6 +211,7 @@ function toggleUserMenu(event: Event) {
 
 function isActive(to: string) {
   if (to === "/dashboard") return route.path === "/dashboard";
+  if (to.includes("/customers")) return route.path.includes("/customers");
   return route.path.startsWith(to);
 }
 

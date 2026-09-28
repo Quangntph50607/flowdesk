@@ -55,12 +55,12 @@
           }}</small>
         </div>
 
-        <Message v-if="errorMsg" severity="error" :closable="false">{{
-          errorMsg
-        }}</Message>
-        <Message v-if="successMsg" severity="success" :closable="false">{{
-          successMsg
-        }}</Message>
+        <AppInlineAlert v-if="errorMsg" severity="error">
+          {{ errorMsg }}
+        </AppInlineAlert>
+        <AppInlineAlert v-if="successMsg" severity="success">
+          {{ successMsg }}
+        </AppInlineAlert>
 
         <Button
           type="submit"

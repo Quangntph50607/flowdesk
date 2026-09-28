@@ -1,7 +1,7 @@
 <template>
   <NuxtLayout>
     <NuxtPage />
-    <Toast position="top-right" />
-    <ConfirmDialog />
+    <AppToastHost />
+    <AppConfirmDialog />
   </NuxtLayout>
 </template>

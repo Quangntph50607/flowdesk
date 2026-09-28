@@ -3,18 +3,28 @@
     :visible="visible"
     header="Thêm nhân viên vào chi nhánh"
     modal
-    style="width: 500px"
+    class="w-[500px] max-w-[calc(100vw-2rem)]"
     @update:visible="$emit('update:visible', $event)"
   >
     <div class="flex gap-2 mb-4 pt-2">
       <button
-        :class="['fd-tab', tab === 'new' ? 'fd-tab--active' : '']"
+        :class="[
+          'cursor-pointer rounded-lg border px-4 py-1.5 text-[13px] font-medium text-slate-500 transition-all duration-150',
+          tab === 'new'
+            ? 'border-slate-900 bg-slate-900 text-white'
+            : 'border-slate-200 bg-transparent',
+        ]"
         @click="tab = 'new'"
       >
         Tạo tài khoản mới
       </button>
       <button
-        :class="['fd-tab', tab === 'existing' ? 'fd-tab--active' : '']"
+        :class="[
+          'cursor-pointer rounded-lg border px-4 py-1.5 text-[13px] font-medium text-slate-500 transition-all duration-150',
+          tab === 'existing'
+            ? 'border-slate-900 bg-slate-900 text-white'
+            : 'border-slate-200 bg-transparent',
+        ]"
         @click="tab = 'existing'"
       >
         Chọn từ workspace
@@ -68,7 +78,7 @@
 
     <!-- Tab: Chọn từ workspace tổng -->
     <div v-if="tab === 'existing'" class="flex flex-col gap-3">
-      <p class="text-sm" style="color: #64748b">
+      <p class="text-sm text-slate-500">
         Chọn thành viên từ workspace tổng
         <strong>{{ parentWorkspaceName }}</strong> chưa có trong chi nhánh này.
       </p>
@@ -88,7 +98,7 @@
           <template #option="{ option }">
             <div class="flex flex-col py-1">
               <span class="text-sm font-medium">{{ option.fullName }}</span>
-              <span class="text-xs" style="color: #94a3b8"
+              <span class="text-xs text-slate-400"
                 >{{ option.email }} · {{ option.roleCode }}</span
               >
             </div>
@@ -126,7 +136,6 @@
 </template>
 
 <script setup lang="ts">
-import { useToast } from "primevue/usetoast";
 
 const props = defineProps<{
   visible: boolean;
@@ -149,7 +158,7 @@ const emit = defineEmits<{
 }>();
 
 const api = useApi();
-const toast = useToast();
+const toast = useAppToast();
 const loading = ref(false);
 const tab = ref<"new" | "existing">("new");
 
@@ -260,22 +269,3 @@ async function handleSubmit() {
   }
 }
 </script>
-
-<style scoped>
-.fd-tab {
-  padding: 6px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.fd-tab--active {
-  background: #0f172a;
-  color: #fff;
-  border-color: #0f172a;
-}
-</style>

@@ -89,7 +89,11 @@ export default defineNuxtConfig({
     autoImport: true,
   },
 
-  css: ["primeicons/primeicons.css", "~/assets/css/main.css"],
+  css: [
+    "primeicons/primeicons.css",
+    "@fortawesome/fontawesome-free/css/all.min.css",
+    "~/assets/css/main.css",
+  ],
 
   runtimeConfig: {
     public: {

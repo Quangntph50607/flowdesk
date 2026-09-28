@@ -23,7 +23,7 @@
         <!-- Workspace switcher header (chỉ hiện nếu có > 1 workspace) -->
         <div
           v-if="availableWorkspaces.length > 1"
-          class="flex items-center gap-2 px-3 py-2.5 cursor-pointer ws-switcher-header"
+          class="flex cursor-pointer items-center gap-2 border-b border-slate-100 bg-white px-3 py-2.5 hover:bg-slate-100"
           style="border-bottom: 1px solid #f1f5f9; background: #fff"
           aria-haspopup="true"
           aria-controls="ws_switch_menu"
@@ -57,8 +57,8 @@
         >
           <template #item="{ item }">
             <div
-              class="flex items-center gap-3 px-3 py-2 cursor-pointer ws-switch-item"
-              :class="{ 'ws-switch-item--active': item.active }"
+              class="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-slate-100"
+              :class="{ 'bg-slate-50': item.active }"
               @click="item.command"
             >
               <div
@@ -146,12 +146,16 @@
         </div>
 
         <!-- Inline info panel -->
-        <Transition name="slide-info">
+        <Transition
+          enter-active-class="overflow-hidden transition-all duration-200 ease-in"
+          leave-active-class="overflow-hidden transition-all duration-200 ease-in"
+          enter-from-class="w-0 opacity-0"
+          leave-to-class="w-0 opacity-0"
+          enter-to-class="w-[260px] opacity-100"
+          leave-from-class="w-[260px] opacity-100"
+        >
           <ChatGroupInfoPanel
-            v-if="
-              showGroupInfo &&
-              chatStore.activeRoom
-            "
+            v-if="showGroupInfo && chatStore.activeRoom"
             :room="chatStore.activeRoom"
             :members="groupMembers"
             :member-count="groupMemberCount"
@@ -195,19 +199,19 @@
       @update:visible="showAddMember = $event"
       @add="handleAddMembers"
     />
-
-    <ConfirmDialog />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import Menu from "primevue/menu";
-import { useToast } from "primevue/usetoast";
-import { useConfirm } from "primevue/useconfirm";
 import { useAuthStore } from "../../../stores/auth";
 import { useChatStore } from "../../../stores/chat";
-import type { ChatLinkItem, ChatMessage, WorkspaceMember } from "../../../types/chat";
+import type {
+  ChatLinkItem,
+  ChatMessage,
+  WorkspaceMember,
+} from "../../../types/chat";
 
 // Type cho ref của ChatWindow
 interface ChatWindowExposed {
@@ -221,8 +225,8 @@ definePageMeta({ middleware: "auth", layout: "default" });
 const api = useApi();
 const authStore = useAuthStore();
 const chatStore = useChatStore();
-const toast = useToast();
-const confirm = useConfirm();
+const toast = useAppToast();
+const confirm = useAppConfirm();
 const {
   connect,
   disconnect,
@@ -709,39 +713,3 @@ onUnmounted(() => {
   chatStore.setActiveRoom(null);
 });
 </script>
-
-<style scoped>
-.ws-switcher-header:hover {
-  background: #f1f5f9 !important;
-}
-
-.ws-switch-item {
-  border-radius: 8px;
-  transition: background 0.15s;
-}
-.ws-switch-item:hover {
-  background: #f1f5f9;
-}
-.ws-switch-item--active {
-  background: #f8fafc;
-}
-
-/* Info panel slide animation */
-.slide-info-enter-active,
-.slide-info-leave-active {
-  transition:
-    width 0.22s ease,
-    opacity 0.22s ease;
-  overflow: hidden;
-}
-.slide-info-enter-from,
-.slide-info-leave-to {
-  width: 0 !important;
-  opacity: 0;
-}
-.slide-info-enter-to,
-.slide-info-leave-from {
-  width: 260px;
-  opacity: 1;
-}
-</style>

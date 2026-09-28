@@ -21,31 +21,44 @@
 @layer components {
   /* ── Layout shell ── */
   .fd-shell {
-    @apply flex min-h-screen;
-    background-color: white;
-    padding: 12px;
-    gap: 12px;
+    min-height: 100vh;
+    display: flex;
+    gap: 16px;
+
+    /* nền ngoài giống PrimeVue */
+    background: white;
+
+    padding: 16px;
   }
 
+  /* Sidebar */
   .fd-sidebar {
-    @apply flex flex-col shrink-0;
-    width: 64px;
-    height: calc(100vh - 24px);
-    position: sticky;
-    top: 12px;
+    width: 82px;
+    min-width: 64px;
+
+    display: flex;
+    flex-direction: column;
+
+    background: #f0f2f6;
+    border-radius: 16px;
+    padding: 8px 8px;
   }
 
+  /* Content trắng bên phải */
   .fd-content-shell {
-    @apply flex-1 overflow-auto rounded-3xl;
-    background-color: #ffffff;
-    box-shadow:
-      0 1px 2px rgba(15, 23, 42, 0.04),
-      0 8px 32px rgba(15, 23, 42, 0.06);
-    border: 1px solid rgba(226, 232, 240, 0.8);
+    flex: 1;
+    min-width: 0;
+    min-height: calc(100vh - 32px);
+
+    background: #ffffff;
+
+    border-radius: 16px;
+
+    overflow: hidden;
   }
 
   .fd-page {
-    @apply p-5 md:p-6;
+    @apply p-1 md:p-2;
   }
 
   /* ── Sidebar nav ── */
@@ -217,6 +230,11 @@
   }
 }
 
+.p-tooltip.p-tooltip-right {
+  margin-left: 8px;
+  size: 0.75rem;
+}
+
 /* ── PrimeVue overrides ── */
 .p-card {
   border-radius: 1rem !important;
@@ -327,6 +345,234 @@
 
 .fd-user-menu .p-menu-item:last-child .p-menu-item-link:hover {
   background-color: #fef2f2 !important;
+}
+
+.fd-toast-host {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 9999;
+  display: flex;
+  width: min(380px, calc(100vw - 32px));
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.fd-toast-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 12px;
+  box-shadow:
+    0 18px 42px rgba(15, 23, 42, 0.16),
+    0 1px 2px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+}
+
+.fd-toast-icon,
+.fd-inline-alert__icon,
+.fd-confirm-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.fd-toast-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.fd-toast-title {
+  color: #0f172a;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.fd-toast-detail {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.fd-toast-close {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.fd-toast-close:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.fd-toast-card--success .fd-toast-icon,
+.fd-inline-alert--success .fd-inline-alert__icon {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.fd-toast-card--error .fd-toast-icon,
+.fd-inline-alert--error .fd-inline-alert__icon {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.fd-toast-card--warn .fd-toast-icon,
+.fd-inline-alert--warn .fd-inline-alert__icon {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.fd-toast-card--info .fd-toast-icon,
+.fd-inline-alert--info .fd-inline-alert__icon {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.fd-toast-enter-active,
+.fd-toast-leave-active {
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.fd-toast-enter-from,
+.fd-toast-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) translateX(12px);
+}
+
+.fd-inline-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  padding: 11px 12px;
+  background: #ffffff;
+}
+
+.fd-inline-alert__icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  font-size: 11px;
+}
+
+.fd-inline-alert__text {
+  min-width: 0;
+  color: #334155;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.fd-inline-alert--success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.fd-inline-alert--error {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.fd-inline-alert--warn {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.fd-inline-alert--info {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.fd-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(4px);
+}
+
+.fd-confirm-panel {
+  width: min(420px, 100%);
+  border-radius: 18px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 18px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+}
+
+.fd-confirm-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  margin-bottom: 14px;
+}
+
+.fd-confirm-icon--danger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.fd-confirm-icon--default {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.fd-confirm-title {
+  color: #0f172a;
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.fd-confirm-message {
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.fd-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.fd-confirm-enter-active,
+.fd-confirm-leave-active {
+  transition: opacity 0.16s ease;
+}
+
+.fd-confirm-enter-from,
+.fd-confirm-leave-to {
+  opacity: 0;
 }
 
 /* Hide PrimeVue invalid license banner */

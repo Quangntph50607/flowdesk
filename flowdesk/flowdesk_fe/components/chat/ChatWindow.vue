@@ -112,7 +112,12 @@
     </div>
 
     <!-- ── File preview bar ─────────────────────────────────────────── -->
-    <Transition name="slide-up">
+    <Transition
+      enter-active-class="transition-all duration-200 ease-in"
+      leave-active-class="transition-all duration-200 ease-in"
+      enter-from-class="translate-y-2 opacity-0"
+      leave-to-class="translate-y-2 opacity-0"
+    >
       <div
         v-if="pendingFile"
         class="px-4 py-2.5 bg-white border-t border-slate-100 flex items-center gap-3"
@@ -235,7 +240,6 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { useToast } from "primevue/usetoast";
 import type { ChatRoom, ChatMessage } from "~/types/chat";
 import { useFileUpload } from "~/composables/useFileUpload";
 
@@ -263,7 +267,7 @@ const emit = defineEmits<{
 const inputText = ref("");
 const messagesContainerRef = ref<HTMLElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
-const toast = useToast();
+const toast = useAppToast();
 
 // ── File size limits ─────────────────────────────────────────────
 const FILE_LIMITS: Record<string, number> = {
@@ -473,15 +477,3 @@ function getScrollHeight() {
 }
 defineExpose({ scrollToBottom, preserveScrollAfterPrepend, getScrollHeight });
 </script>
-
-<style scoped>
-.slide-up-enter-active,
-.slide-up-leave-active {
-  transition: all 0.2s ease;
-}
-.slide-up-enter-from,
-.slide-up-leave-to {
-  opacity: 0;
-  transform: translateY(8px);
-}
-</style>
