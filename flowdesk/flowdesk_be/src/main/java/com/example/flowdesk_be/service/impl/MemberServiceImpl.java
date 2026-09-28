@@ -63,6 +63,12 @@ public class MemberServiceImpl implements MemberService {
   @Override
   @Transactional(readOnly = true)
   public List<MemberResponse> getAllMembersFlat(Long workspaceId, String requesterEmail) {
+    return getAllMembersFlat(workspaceId, requesterEmail, null);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<MemberResponse> getAllMembersFlat(Long workspaceId, String requesterEmail, Long branchId) {
     Workspace ws = findWorkspaceOrThrow(workspaceId);
 
     // Nếu là workspace con, resolve lên workspace cha
@@ -84,12 +90,25 @@ public class MemberServiceImpl implements MemberService {
 
     // Lấy danh sách id: workspace tổng + tất cả chi nhánh
     List<Long> allWorkspaceIds = new java.util.ArrayList<>();
-    allWorkspaceIds.add(parentWorkspaceId);
-    workspaceRepository.findAllByParentIdAndIsActiveTrue(parentWorkspaceId)
-        .forEach(b -> allWorkspaceIds.add(b.getId()));
+    if (branchId != null) {
+      Workspace branch = findWorkspaceOrThrow(branchId);
+      if (branch.getLevel() != 1 || branch.getParent() == null
+          || !branch.getParent().getId().equals(parentWorkspaceId)) {
+        throw AppException.badRequest("Chi nhánh không thuộc workspace tổng đã chọn");
+      }
+      if (!requester.isSuperAdmin()) {
+        assertCanAccessWorkspace(requester, branchId);
+      }
+      allWorkspaceIds.add(branchId);
+    } else {
+      allWorkspaceIds.add(parentWorkspaceId);
+      workspaceRepository.findAllByParentIdAndIsActiveTrue(parentWorkspaceId)
+          .forEach(b -> allWorkspaceIds.add(b.getId()));
+    }
 
     return memberRepository.findAllByWorkspaceIdIn(allWorkspaceIds)
         .stream()
+        .filter(member -> branchId == null || member.getIsActive())
         .map(MemberResponse::from)
         .toList();
   }
@@ -97,7 +116,13 @@ public class MemberServiceImpl implements MemberService {
   @Override
   @Transactional(readOnly = true)
   public List<MemberGroupResponse> getAllMembersGrouped(Long workspaceId, String requesterEmail) {
-    List<MemberResponse> flat = getAllMembersFlat(workspaceId, requesterEmail);
+    return getAllMembersGrouped(workspaceId, requesterEmail, null);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<MemberGroupResponse> getAllMembersGrouped(Long workspaceId, String requesterEmail, Long branchId) {
+    List<MemberResponse> flat = getAllMembersFlat(workspaceId, requesterEmail, branchId);
 
     // Group theo userId — giữ thứ tự insert (LinkedHashMap)
     java.util.Map<Long, MemberGroupResponse> map = new java.util.LinkedHashMap<>();

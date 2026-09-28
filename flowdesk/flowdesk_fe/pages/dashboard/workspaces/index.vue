@@ -93,21 +93,17 @@
       :workspace="editing"
       @saved="fetchWorkspaces"
     />
-
-    <ConfirmDialog />
   </div>
 </template>
 
 <script setup lang="ts">
-import { useConfirm } from "primevue/useconfirm";
-import { useToast } from "primevue/usetoast";
 
 definePageMeta({ middleware: "auth" });
 
 const api = useApi();
 const authStore = useAuthStore();
-const confirm = useConfirm();
-const toast = useToast();
+const confirm = useAppConfirm();
+const toast = useAppToast();
 
 const workspaces = ref<any[]>([]);
 const loading = ref(false);

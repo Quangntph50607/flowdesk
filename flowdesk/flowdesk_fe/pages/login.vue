@@ -44,9 +44,9 @@
           }}</small>
         </div>
 
-        <Message v-if="errorMsg" severity="error" :closable="false">
+        <AppInlineAlert v-if="errorMsg" severity="error">
           {{ errorMsg }}
-        </Message>
+        </AppInlineAlert>
 
         <Button
           type="submit"

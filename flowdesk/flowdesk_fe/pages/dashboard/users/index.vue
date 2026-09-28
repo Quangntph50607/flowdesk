@@ -92,13 +92,12 @@
 </template>
 
 <script setup lang="ts">
-import { useToast } from "primevue/usetoast";
 
 definePageMeta({ middleware: "auth" });
 
 const api = useApi();
 const authStore = useAuthStore();
-const toast = useToast();
+const toast = useAppToast();
 
 onMounted(() => {
   if (!authStore.isSuperAdmin) navigateTo("/dashboard");

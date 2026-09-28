@@ -33,7 +33,6 @@
 </template>
 
 <script setup lang="ts">
-import { useToast } from "primevue/usetoast";
 
 const props = defineProps<{
   visible: boolean;
@@ -45,7 +44,7 @@ const emit = defineEmits<{
 }>();
 
 const api = useApi();
-const toast = useToast();
+const toast = useAppToast();
 const loading = ref(false);
 const form = reactive({ name: "" });
 

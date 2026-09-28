@@ -171,10 +171,11 @@ public class WorkspaceController {
   @GetMapping("/api/workspaces/{workspaceId}/all-members")
   public ResponseEntity<ApiResponse<List<MemberGroupResponse>>> getAllMembersGrouped(
       @PathVariable Long workspaceId,
+      @RequestParam(required = false) Long branchId,
       @AuthenticationPrincipal UserDetails userDetails) {
 
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        memberService.getAllMembersGrouped(workspaceId, userDetails.getUsername())));
+        memberService.getAllMembersGrouped(workspaceId, userDetails.getUsername(), branchId)));
   }
 
   @Tag(name = "Workspace – Members")
