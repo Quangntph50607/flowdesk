@@ -9,19 +9,27 @@
     font-family: "Roboto", system-ui, sans-serif;
   }
 
+  html,
+  body,
+  #__nuxt {
+    height: 100%;
+  }
+
   body {
     font-family: "Roboto", system-ui, sans-serif;
     font-size: 14px;
     background-color: #eef2f6;
     color: #0f172a;
     -webkit-font-smoothing: antialiased;
+    overflow: hidden;
   }
 }
 
 @layer components {
   /* ── Layout shell ── */
   .fd-shell {
-    min-height: 100vh;
+    height: 100dvh;
+    min-height: 0;
     display: flex;
     gap: 16px;
 
@@ -29,12 +37,15 @@
     background: white;
 
     padding: 16px;
+    overflow: hidden;
   }
 
   /* Sidebar */
   .fd-sidebar {
     width: 82px;
     min-width: 64px;
+    height: calc(100dvh - 32px);
+    min-height: 0;
 
     display: flex;
     flex-direction: column;
@@ -42,23 +53,37 @@
     background: #f0f2f6;
     border-radius: 16px;
     padding: 8px 8px;
+    overflow: hidden;
   }
 
   /* Content trắng bên phải */
+  .fd-sidebar nav {
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .fd-sidebar nav::-webkit-scrollbar {
+    width: 0;
+  }
+
   .fd-content-shell {
     flex: 1;
     min-width: 0;
-    min-height: calc(100vh - 32px);
+    height: calc(100dvh - 32px);
+    min-height: 0;
 
     background: #ffffff;
 
     border-radius: 16px;
 
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .fd-page {
     @apply p-1 md:p-2;
+    min-height: 100%;
   }
 
   /* ── Sidebar nav ── */
