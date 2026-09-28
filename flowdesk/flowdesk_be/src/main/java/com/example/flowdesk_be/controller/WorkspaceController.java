@@ -19,7 +19,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
@@ -30,10 +38,6 @@ public class WorkspaceController {
   private final WorkspaceService workspaceService;
   private final MemberService memberService;
   private final UserService userService;
-
-  // ================================================================
-  // SUPER_ADMIN — Workspace tổng /api/admin/workspaces
-  // ================================================================
 
   @Tag(name = "Admin – Workspaces")
   @Operation(summary = "Tạo workspace tổng mới")
@@ -83,12 +87,22 @@ public class WorkspaceController {
   @DeleteMapping("/api/admin/workspaces/{id}")
   public ResponseEntity<ApiResponse<Void>> deleteWorkspace(@PathVariable Long id) {
     workspaceService.deleteWorkspace(id);
-    return ResponseEntity.ok(ApiResponse.success(200, "Xoá workspace thành công", null));
+    return ResponseEntity.ok(ApiResponse.success(200, "Xóa workspace thành công", null));
   }
 
-  // ================================================================
-  // OWNER + ADMIN — Chi nhánh /api/workspaces/{id}/branches
-  // ================================================================
+  @Tag(name = "Workspace")
+  @Operation(summary = "Tạo không gian làm việc gốc cho người dùng hiện tại")
+  @PostMapping("/api/workspaces")
+  public ResponseEntity<ApiResponse<WorkspaceResponse>> createOwnWorkspace(
+      @AuthenticationPrincipal UserDetails userDetails,
+      @Valid @RequestBody CreateWorkspaceRequest request) {
+
+    request.setOwnerEmail(userDetails.getUsername());
+    WorkspaceResponse data = workspaceService.createWorkspace(
+        userDetails.getUsername(), request);
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(ApiResponse.success(201, "Tạo workspace thành công", data));
+  }
 
   @Tag(name = "Workspace – Branches")
   @Operation(summary = "Lấy workspace (dành cho member — OWNER/ADMIN/AGENT)")
@@ -148,10 +162,6 @@ public class WorkspaceController {
     workspaceService.deleteBranch(workspaceId, branchId);
     return ResponseEntity.ok(ApiResponse.success(200, "Xoá chi nhánh thành công", null));
   }
-
-  // ================================================================
-  // OWNER + ADMIN — Members /api/workspaces/{id}/members
-  // ================================================================
 
   @Tag(name = "Workspace – Members")
   @Operation(summary = "Danh sách user chưa là member của workspace (dùng cho add-member dialog)")

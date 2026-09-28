@@ -34,15 +34,33 @@ export const useAuthStore = defineStore("auth", {
   },
 
   actions: {
+    setSession(data: {
+      accessToken: string;
+      refreshToken: string;
+      userId: number;
+      email: string;
+      fullName: string;
+      avatarUrl?: string;
+      systemRole?: string | null;
+      workspaces?: WorkspaceInfo[];
+    }) {
+      useCookie("access_token", { maxAge: 60 * 60 }).value = data.accessToken;
+      useCookie("refresh_token", { maxAge: 60 * 60 * 24 * 7 }).value =
+        data.refreshToken;
+      this.user = {
+        id: data.userId,
+        email: data.email,
+        fullName: data.fullName,
+        avatarUrl: data.avatarUrl,
+        systemRole: data.systemRole,
+        workspaces: data.workspaces ?? [],
+      };
+    },
+
     async login(email: string, password: string) {
       const api = useApi();
       const res = await api.post("/api/auth/login", { email, password });
-      const { accessToken, refreshToken, user } = res.data.data;
-
-      useCookie("access_token", { maxAge: 60 * 60 }).value = accessToken;
-      useCookie("refresh_token", { maxAge: 60 * 60 * 24 * 7 }).value =
-        refreshToken;
-      this.user = user;
+      this.setSession(res.data.data);
     },
 
     async register(payload: {
@@ -52,7 +70,8 @@ export const useAuthStore = defineStore("auth", {
     }) {
       const api = useApi();
       const res = await api.post("/api/auth/register", payload);
-      return res.data;
+      this.setSession(res.data.data);
+      return res.data.data;
     },
 
     async fetchMe() {

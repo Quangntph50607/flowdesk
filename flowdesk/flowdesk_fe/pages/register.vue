@@ -8,58 +8,61 @@
         <i class="pi pi-th-large" style="color: #ffffff; font-size: 18px" />
       </div>
       <div class="text-2xl font-bold mb-1" style="color: #0f172a">Flowdesk</div>
-      <p class="text-sm" style="color: #64748b">Tạo tài khoản mới</p>
+      <p class="text-sm" style="color: #64748b">
+        {{ step === "account" ? "Tạo tài khoản mới" : "Tạo workspace đầu tiên" }}
+      </p>
     </div>
 
     <div class="px-8 pb-8">
-      <form class="flex flex-col gap-4" @submit.prevent="handleRegister">
+      <form
+        v-if="step === 'account'"
+        class="flex flex-col gap-4"
+        @submit.prevent="handleRegister"
+      >
         <div class="flex flex-col gap-1">
           <label class="text-sm font-medium text-surface-700">Họ và tên</label>
           <InputText
-            v-model="form.fullName"
+            v-model="accountForm.fullName"
             placeholder="Nguyễn Văn A"
-            :invalid="!!errors.fullName"
+            :invalid="!!accountErrors.fullName"
             fluid
           />
-          <small v-if="errors.fullName" class="text-red-500">{{
-            errors.fullName
-          }}</small>
+          <small v-if="accountErrors.fullName" class="text-red-500">
+            {{ accountErrors.fullName }}
+          </small>
         </div>
 
         <div class="flex flex-col gap-1">
           <label class="text-sm font-medium text-surface-700">Email</label>
           <InputText
-            v-model="form.email"
+            v-model="accountForm.email"
             type="email"
             placeholder="email@example.com"
-            :invalid="!!errors.email"
+            :invalid="!!accountErrors.email"
             fluid
           />
-          <small v-if="errors.email" class="text-red-500">{{
-            errors.email
-          }}</small>
+          <small v-if="accountErrors.email" class="text-red-500">
+            {{ accountErrors.email }}
+          </small>
         </div>
 
         <div class="flex flex-col gap-1">
           <label class="text-sm font-medium text-surface-700">Mật khẩu</label>
           <Password
-            v-model="form.password"
+            v-model="accountForm.password"
             placeholder="Tối thiểu 6 ký tự"
             :feedback="false"
             toggle-mask
-            :invalid="!!errors.password"
+            :invalid="!!accountErrors.password"
             fluid
           />
-          <small v-if="errors.password" class="text-red-500">{{
-            errors.password
-          }}</small>
+          <small v-if="accountErrors.password" class="text-red-500">
+            {{ accountErrors.password }}
+          </small>
         </div>
 
         <AppInlineAlert v-if="errorMsg" severity="error">
           {{ errorMsg }}
-        </AppInlineAlert>
-        <AppInlineAlert v-if="successMsg" severity="success">
-          {{ successMsg }}
         </AppInlineAlert>
 
         <Button
@@ -71,7 +74,58 @@
         />
       </form>
 
-      <div class="text-center mt-6 text-sm">
+      <form
+        v-else
+        class="flex flex-col gap-4"
+        @submit.prevent="handleCreateWorkspace"
+      >
+        <AppInlineAlert severity="success">
+          Tài khoản đã được tạo. Hãy tạo workspace để bắt đầu sử dụng Flowdesk.
+        </AppInlineAlert>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-surface-700">Tên workspace</label>
+          <InputText
+            v-model="workspaceForm.name"
+            placeholder="Flowdesk Team"
+            :invalid="!!workspaceErrors.name"
+            fluid
+          />
+          <small v-if="workspaceErrors.name" class="text-red-500">
+            {{ workspaceErrors.name }}
+          </small>
+        </div>
+
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium text-surface-700">Slug</label>
+          <InputText
+            v-model="workspaceForm.slug"
+            placeholder="flowdesk-team"
+            :invalid="!!workspaceErrors.slug"
+            fluid
+          />
+          <small v-if="workspaceErrors.slug" class="text-red-500">
+            {{ workspaceErrors.slug }}
+          </small>
+          <span v-else class="text-xs" style="color: #94a3b8">
+            Slug chỉ gồm chữ thường, số và dấu gạch ngang.
+          </span>
+        </div>
+
+        <AppInlineAlert v-if="errorMsg" severity="error">
+          {{ errorMsg }}
+        </AppInlineAlert>
+
+        <Button
+          type="submit"
+          label="Tạo workspace"
+          :loading="loading"
+          fluid
+          class="!px-5 !text-sm"
+        />
+      </form>
+
+      <div v-if="step === 'account'" class="text-center mt-6 text-sm">
         <span style="color: #64748b">Đã có tài khoản? </span>
         <NuxtLink
           to="/login"
@@ -89,45 +143,109 @@
 definePageMeta({ layout: "auth", middleware: "guest" });
 
 const authStore = useAuthStore();
+const api = useApi();
 const router = useRouter();
 
-const form = reactive({ fullName: "", email: "", password: "" });
-const errors = reactive({ fullName: "", email: "", password: "" });
+const step = ref<"account" | "workspace">("account");
+const accountForm = reactive({ fullName: "", email: "", password: "" });
+const accountErrors = reactive({ fullName: "", email: "", password: "" });
+const workspaceForm = reactive({ name: "", slug: "" });
+const workspaceErrors = reactive({ name: "", slug: "" });
 const errorMsg = ref("");
-const successMsg = ref("");
 const loading = ref(false);
 
-function validate() {
-  errors.fullName = "";
-  errors.email = "";
-  errors.password = "";
+function toSlug(str: string) {
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "d")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+}
+
+watch(
+  () => workspaceForm.name,
+  (value) => {
+    workspaceForm.slug = toSlug(value);
+  },
+);
+
+function validateAccount() {
+  accountErrors.fullName = "";
+  accountErrors.email = "";
+  accountErrors.password = "";
   let ok = true;
-  if (!form.fullName) {
-    errors.fullName = "Họ tên không được để trống";
+
+  if (!accountForm.fullName.trim()) {
+    accountErrors.fullName = "Họ tên không được để trống";
     ok = false;
   }
-  if (!form.email) {
-    errors.email = "Email không được để trống";
+  if (!accountForm.email.trim()) {
+    accountErrors.email = "Email không được để trống";
     ok = false;
   }
-  if (!form.password || form.password.length < 6) {
-    errors.password = "Mật khẩu tối thiểu 6 ký tự";
+  if (!accountForm.password || accountForm.password.length < 6) {
+    accountErrors.password = "Mật khẩu tối thiểu 6 ký tự";
     ok = false;
   }
+
+  return ok;
+}
+
+function validateWorkspace() {
+  workspaceErrors.name = "";
+  workspaceErrors.slug = "";
+  let ok = true;
+
+  if (!workspaceForm.name.trim()) {
+    workspaceErrors.name = "Tên workspace không được để trống";
+    ok = false;
+  }
+  if (!workspaceForm.slug.trim()) {
+    workspaceErrors.slug = "Slug không được để trống";
+    ok = false;
+  } else if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(workspaceForm.slug)) {
+    workspaceErrors.slug = "Slug chỉ gồm chữ thường, số và dấu gạch ngang";
+    ok = false;
+  }
+
   return ok;
 }
 
 async function handleRegister() {
-  if (!validate()) return;
+  if (!validateAccount()) return;
   loading.value = true;
   errorMsg.value = "";
-  successMsg.value = "";
+
   try {
-    await authStore.register(form);
-    successMsg.value = "Đăng ký thành công! Đang chuyển hướng...";
-    setTimeout(() => router.push("/login"), 1500);
+    await authStore.register(accountForm);
+    workspaceForm.name = `${accountForm.fullName.trim()}'s Workspace`;
+    step.value = "workspace";
   } catch (err: any) {
     errorMsg.value = err.response?.data?.message || "Đăng ký thất bại";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function handleCreateWorkspace() {
+  if (!validateWorkspace()) return;
+  loading.value = true;
+  errorMsg.value = "";
+
+  try {
+    await api.post("/api/workspaces", {
+      name: workspaceForm.name.trim(),
+      slug: workspaceForm.slug.trim(),
+    });
+    await authStore.fetchMe();
+    await router.push("/dashboard");
+  } catch (err: any) {
+    errorMsg.value = err.response?.data?.message || "Tạo workspace thất bại";
   } finally {
     loading.value = false;
   }
