@@ -13,6 +13,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
   boolean existsByEmail(String email);
 
+  boolean existsByPhoneNormalized(String phoneNormalized);
+
+  boolean existsByPhoneNormalizedAndIdNot(String phoneNormalized, Long id);
+
   List<User> findByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCase(String email, String fullName);
 
   // User chưa là member của workspace chỉ định (dùng cho add-member dialog)

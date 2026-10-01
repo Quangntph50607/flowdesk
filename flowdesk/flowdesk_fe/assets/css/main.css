@@ -489,7 +489,7 @@
 
 .fd-inline-alert {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   border-radius: 14px;
   border: 1px solid #e2e8f0;

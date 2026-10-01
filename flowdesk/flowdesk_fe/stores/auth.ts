@@ -13,6 +13,9 @@ interface User {
   email: string;
   fullName: string;
   avatarUrl?: string;
+  phone?: string;
+  address?: string;
+  dateOfBirth?: string;
   systemRole?: string | null;
   isActive?: boolean;
   workspaces?: WorkspaceInfo[];
@@ -41,17 +44,22 @@ export const useAuthStore = defineStore("auth", {
       email: string;
       fullName: string;
       avatarUrl?: string;
+      phone?: string;
+      address?: string;
+      dateOfBirth?: string;
       systemRole?: string | null;
       workspaces?: WorkspaceInfo[];
     }) {
-      useCookie("access_token", { maxAge: 60 * 60 }).value = data.accessToken;
-      useCookie("refresh_token", { maxAge: 60 * 60 * 24 * 7 }).value =
-        data.refreshToken;
+      useAccessTokenCookie().value = data.accessToken;
+      useRefreshTokenCookie().value = data.refreshToken;
       this.user = {
         id: data.userId,
         email: data.email,
         fullName: data.fullName,
         avatarUrl: data.avatarUrl,
+        phone: data.phone,
+        address: data.address,
+        dateOfBirth: data.dateOfBirth,
         systemRole: data.systemRole,
         workspaces: data.workspaces ?? [],
       };
@@ -67,6 +75,9 @@ export const useAuthStore = defineStore("auth", {
       email: string;
       password: string;
       fullName: string;
+      phone?: string;
+      address?: string;
+      dateOfBirth?: string;
     }) {
       const api = useApi();
       const res = await api.post("/api/auth/register", payload);
@@ -79,14 +90,36 @@ export const useAuthStore = defineStore("auth", {
         const api = useApi();
         const res = await api.get("/api/me");
         this.user = res.data.data;
+        return true;
       } catch {
         this.user = null;
+        return false;
+      }
+    },
+
+    async refreshSession() {
+      const refreshToken = useRefreshTokenCookie();
+      if (!refreshToken.value) {
+        return false;
+      }
+
+      try {
+        const api = useApi();
+        const res = await api.post("/api/auth/refresh", {
+          refreshToken: refreshToken.value,
+        });
+        this.setSession(res.data.data);
+        return true;
+      } catch {
+        clearAuthCookies();
+        this.user = null;
+        return false;
       }
     },
 
     async logout() {
       try {
-        const refreshToken = useCookie("refresh_token");
+        const refreshToken = useRefreshTokenCookie();
         if (refreshToken.value) {
           const api = useApi();
           await api.post("/api/auth/logout", {
@@ -96,8 +129,7 @@ export const useAuthStore = defineStore("auth", {
       } catch {
         /* ignore */
       }
-      useCookie("access_token").value = null;
-      useCookie("refresh_token").value = null;
+      clearAuthCookies();
       this.user = null;
       await navigateTo("/login");
     },

@@ -21,10 +21,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
+
+  private static final Pattern PHONE_PATTERN = Pattern.compile("0\\d{9,10}");
 
   private final UserRepository userRepository;
   private final RefreshTokenRepository refreshTokenRepository;
@@ -42,10 +45,20 @@ public class AuthServiceImpl implements AuthService {
       throw AppException.conflict("Email đã được sử dụng");
     }
 
+    String phone = blankToNull(request.getPhone());
+    String phoneNormalized = normalizePhoneOrThrow(phone);
+    if (phoneNormalized != null && userRepository.existsByPhoneNormalized(phoneNormalized)) {
+      throw AppException.conflict("Số điện thoại đã được sử dụng");
+    }
+
     User user = User.builder()
         .email(request.getEmail())
         .passwordHash(passwordEncoder.encode(request.getPassword()))
         .fullName(request.getFullName())
+        .phone(phone)
+        .phoneNormalized(phoneNormalized)
+        .address(blankToNull(request.getAddress()))
+        .dateOfBirth(request.getDateOfBirth())
         .isActive(true)
         .build();
 
@@ -147,7 +160,33 @@ public class AuthServiceImpl implements AuthService {
         user.getEmail(),
         user.getFullName(),
         user.getAvatarUrl(),
+        user.getPhone(),
+        user.getAddress(),
+        user.getDateOfBirth(),
         user.getSystemRole(),
         workspaces);
+  }
+
+  private String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
+  }
+
+  private String normalizePhoneOrThrow(String phone) {
+    if (phone == null) {
+      return null;
+    }
+
+    String normalized = phone.replaceAll("[\\s.\\-()]", "");
+    if (normalized.startsWith("+84")) {
+      normalized = "0" + normalized.substring(3);
+    } else if (normalized.startsWith("84")) {
+      normalized = "0" + normalized.substring(2);
+    }
+
+    if (!PHONE_PATTERN.matcher(normalized).matches()) {
+      throw AppException.badRequest("Số điện thoại không đúng định dạng");
+    }
+
+    return normalized;
   }
 }

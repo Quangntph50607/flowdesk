@@ -7,6 +7,38 @@
     @update:visible="$emit('update:visible', $event)"
   >
     <div class="flex flex-col gap-4 pt-2">
+      <div class="flex justify-center">
+        <button
+          type="button"
+          class="relative w-24 h-24 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-2xl overflow-visible shrink-0 transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-300"
+          :disabled="uploadingGroupAvatar"
+          @click="avatarInputRef?.click()"
+        >
+          <img
+            v-if="groupAvatarUrl"
+            :src="groupAvatarUrl"
+            :alt="groupName || 'group'"
+            class="w-full h-full rounded-full object-cover"
+          />
+          <span v-else>{{ groupName.trim().charAt(0).toUpperCase() || "N" }}</span>
+          <span
+            class="absolute right-0 bottom-0 w-8 h-8 rounded-full bg-slate-900 text-white border-2 border-white flex items-center justify-center shadow-sm"
+          >
+            <i
+              class="pi"
+              :class="uploadingGroupAvatar ? 'pi-spin pi-spinner' : 'pi-camera'"
+              style="font-size: 13px"
+            />
+          </span>
+        </button>
+        <input
+          ref="avatarInputRef"
+          type="file"
+          accept="image/*"
+          class="hidden"
+          @change="handleAvatarFile"
+        />
+      </div>
       <!-- Tên nhóm -->
       <div class="flex flex-col gap-1">
         <label class="text-sm font-medium" style="color: #374151">
@@ -78,7 +110,13 @@
                 font-size: 12px;
               "
             >
-              {{ m.fullName?.charAt(0).toUpperCase() }}
+              <img
+                v-if="m.avatarUrl"
+                :src="m.avatarUrl"
+                :alt="m.fullName"
+                class="w-full h-full rounded-full object-cover"
+              />
+              <span v-else>{{ m.fullName?.charAt(0).toUpperCase() }}</span>
             </div>
             <div class="min-w-0">
               <p class="text-sm font-medium truncate" style="color: #0f172a">
@@ -128,12 +166,16 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "update:visible", val: boolean): void;
-  (e: "create", payload: { name: string; memberIds: number[] }): void;
+  (e: "create", payload: { name: string; avatarUrl?: string | null; memberIds: number[] }): void;
 }>();
 
 const groupName = ref("");
+const groupAvatarUrl = ref<string | null>(null);
+const avatarInputRef = ref<HTMLInputElement | null>(null);
+const uploadingGroupAvatar = ref(false);
 const search = ref("");
 const selected = ref<WorkspaceMember[]>([]);
+const { uploadAvatar } = useFileUpload();
 
 const filteredMembers = computed(() => {
   const q = search.value.toLowerCase();
@@ -162,8 +204,23 @@ function handleCreate() {
   if (!groupName.value.trim() || selected.value.length === 0) return;
   emit("create", {
     name: groupName.value.trim(),
+    avatarUrl: groupAvatarUrl.value,
     memberIds: selected.value.map((m) => m.userId),
   });
+}
+
+async function handleAvatarFile(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  uploadingGroupAvatar.value = true;
+  try {
+    const uploaded = await uploadAvatar(file);
+    if (uploaded?.fileUrl) groupAvatarUrl.value = uploaded.fileUrl;
+  } finally {
+    uploadingGroupAvatar.value = false;
+  }
 }
 
 function handleClose() {
@@ -172,6 +229,7 @@ function handleClose() {
 
 function reset() {
   groupName.value = "";
+  groupAvatarUrl.value = null;
   search.value = "";
   selected.value = [];
 }

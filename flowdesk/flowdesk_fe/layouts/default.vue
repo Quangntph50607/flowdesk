@@ -161,7 +161,7 @@ const navItems = computed(() => {
   const items: { to: string; label: string; icon: string; badge?: number }[] = [
     {
       to: "/dashboard",
-      label: "Dashboard",
+      label: "Tổng quan",
       icon: "fa-solid fa-house",
     },
     {

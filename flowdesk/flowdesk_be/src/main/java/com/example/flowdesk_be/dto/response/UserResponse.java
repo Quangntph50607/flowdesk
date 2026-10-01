@@ -4,6 +4,7 @@ import com.example.flowdesk_be.entity.User;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -15,6 +16,9 @@ public class UserResponse {
   private String email;
   private String fullName;
   private String avatarUrl;
+  private String phone;
+  private String address;
+  private LocalDate dateOfBirth;
   private String systemRole;
   private Boolean isActive;
   private LocalDateTime createdAt;
@@ -29,6 +33,9 @@ public class UserResponse {
     r.email = user.getEmail();
     r.fullName = user.getFullName();
     r.avatarUrl = user.getAvatarUrl();
+    r.phone = user.getPhone();
+    r.address = user.getAddress();
+    r.dateOfBirth = user.getDateOfBirth();
     r.systemRole = user.getSystemRole();
     r.isActive = user.getIsActive();
     r.createdAt = user.getCreatedAt();

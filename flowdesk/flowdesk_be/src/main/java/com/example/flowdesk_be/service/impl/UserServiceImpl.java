@@ -11,10 +11,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
+
+  private static final Pattern PHONE_PATTERN = Pattern.compile("0\\d{9,10}");
 
   private final UserRepository userRepository;
 
@@ -100,7 +103,46 @@ public class UserServiceImpl implements UserService {
       user.setFullName(request.getFullName());
     }
     if (request.getAvatarUrl() != null) {
-      user.setAvatarUrl(request.getAvatarUrl());
+      user.setAvatarUrl(blankToNull(request.getAvatarUrl()));
     }
+    if (request.getPhone() != null) {
+      String phone = blankToNull(request.getPhone());
+      String phoneNormalized = normalizePhoneOrThrow(phone);
+      if (phoneNormalized != null
+          && userRepository.existsByPhoneNormalizedAndIdNot(phoneNormalized, user.getId())) {
+        throw AppException.conflict("Số điện thoại đã được sử dụng");
+      }
+      user.setPhone(phone);
+      user.setPhoneNormalized(phoneNormalized);
+    }
+    if (request.getAddress() != null) {
+      user.setAddress(blankToNull(request.getAddress()));
+    }
+    if (request.getDateOfBirth() != null) {
+      user.setDateOfBirth(request.getDateOfBirth());
+    }
+  }
+
+  private String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
+  }
+
+  private String normalizePhoneOrThrow(String phone) {
+    if (phone == null) {
+      return null;
+    }
+
+    String normalized = phone.replaceAll("[\\s.\\-()]", "");
+    if (normalized.startsWith("+84")) {
+      normalized = "0" + normalized.substring(3);
+    } else if (normalized.startsWith("84")) {
+      normalized = "0" + normalized.substring(2);
+    }
+
+    if (!PHONE_PATTERN.matcher(normalized).matches()) {
+      throw AppException.badRequest("Số điện thoại không đúng định dạng");
+    }
+
+    return normalized;
   }
 }

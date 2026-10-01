@@ -28,6 +28,14 @@ public class ChatRoom {
     @Column(length = 150)
     private String name;
 
+    @Nationalized
+    @Column(length = 500)
+    private String avatarUrl;
+
+    @Nationalized
+    @Column(length = 500)
+    private String description;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;

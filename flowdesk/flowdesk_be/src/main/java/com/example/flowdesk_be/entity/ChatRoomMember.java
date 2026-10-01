@@ -33,7 +33,24 @@ public class ChatRoomMember {
     @Column(nullable = false)
     private Boolean isActive = true;
 
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean isMuted = false;
+
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean isPinned = false;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "invited_by")
+    private User invitedBy;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "removed_by")
+    private User removedBy;
+
     private LocalDateTime joinedAt;
+    private LocalDateTime leftAt;
     private LocalDateTime lastReadAt;
 
     @PrePersist

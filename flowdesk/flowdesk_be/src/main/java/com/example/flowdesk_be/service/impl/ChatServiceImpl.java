@@ -101,6 +101,7 @@ public class ChatServiceImpl implements ChatService {
     // Tên hiển thị: nếu DIRECT thì lấy tên người kia
     String name = room.getName();
     String avatarInitial = "?";
+    String avatarUrl = room.getAvatarUrl();
     if ("DIRECT".equals(room.getType())) {
       ChatRoomMember other = memberRepo.findByRoomIdAndIsActiveTrue(room.getId())
           .stream()
@@ -112,6 +113,7 @@ public class ChatServiceImpl implements ChatService {
         avatarInitial = name != null && !name.isEmpty()
             ? String.valueOf(name.charAt(0)).toUpperCase()
             : "?";
+        avatarUrl = other.getUser().getAvatarUrl();
       }
     } else if (name != null && !name.isEmpty()) {
       avatarInitial = String.valueOf(name.charAt(0)).toUpperCase();
@@ -131,6 +133,8 @@ public class ChatServiceImpl implements ChatService {
         .type(room.getType())
         .name(name)
         .avatarInitial(avatarInitial)
+        .avatarUrl(resolveSharedFileUrl(avatarUrl))
+        .description(room.getDescription())
         .lastMessage(last == null ? null
             : (last.getIsRecalled() ? "Tin nhắn đã được thu hồi" : last.getContent()))
         .lastMessageAt(last == null ? room.getCreatedAt() : last.getCreatedAt())
@@ -221,13 +225,15 @@ public class ChatServiceImpl implements ChatService {
         .workspace(effectiveWorkspace)
         .type("GROUP")
         .name(req.getName())
+        .avatarUrl(req.getAvatarUrl())
+        .description(req.getDescription())
         .createdBy(me)
         .build();
     room = roomRepo.save(room);
 
     // Thêm người tạo làm owner
     memberRepo.save(ChatRoomMember.builder()
-        .room(room).user(me).isOwner(true).build());
+        .room(room).user(me).isOwner(true).invitedBy(me).build());
 
     // Thêm các member được chọn
     final Long roomId = room.getId();
@@ -238,7 +244,9 @@ public class ChatServiceImpl implements ChatService {
       assertInWorkspace(effectiveWorkspaceId, memberId); // isolation
       memberRepo.save(ChatRoomMember.builder()
           .room(ChatRoom.builder().id(roomId).build())
-          .user(member).build());
+          .user(member)
+          .invitedBy(me)
+          .build());
     }
 
     // System message
@@ -317,6 +325,9 @@ public class ChatServiceImpl implements ChatService {
       throw AppException.forbidden("Chỉ trưởng nhóm được thêm thành viên");
     }
     ChatRoom room = myMembership.getRoom();
+    if (!"GROUP".equals(room.getType())) {
+      throw AppException.badRequest("Chỉ có thể thêm thành viên vào GROUP");
+    }
     assertInWorkspace(room.getWorkspace().getId(), targetUserId);
 
     if (memberRepo.existsByRoomIdAndUserIdAndIsActiveTrue(roomId, targetUserId)) {
@@ -328,9 +339,12 @@ public class ChatServiceImpl implements ChatService {
     memberRepo.findByRoomIdAndUserId(roomId, targetUserId).ifPresentOrElse(
         m -> {
           m.setIsActive(true);
+          m.setInvitedBy(me);
+          m.setRemovedBy(null);
+          m.setLeftAt(null);
           memberRepo.save(m);
         },
-        () -> memberRepo.save(ChatRoomMember.builder().room(room).user(target).build()));
+        () -> memberRepo.save(ChatRoomMember.builder().room(room).user(target).invitedBy(me).build()));
 
     saveSystemMessage(room, me.getFullName() + " đã thêm " + target.getFullName() + " vào nhóm.");
   }
@@ -346,8 +360,13 @@ public class ChatServiceImpl implements ChatService {
     if (me.getId().equals(targetUserId)) {
       throw AppException.badRequest("Trưởng nhóm không thể tự xóa mình");
     }
+    if (!"GROUP".equals(myMembership.getRoom().getType())) {
+      throw AppException.badRequest("Chỉ có thể xóa thành viên khỏi GROUP");
+    }
     ChatRoomMember target = assertActiveMember(roomId, targetUserId);
     target.setIsActive(false);
+    target.setRemovedBy(me);
+    target.setLeftAt(LocalDateTime.now());
     memberRepo.save(target);
 
     User targetUser = target.getUser();
@@ -363,7 +382,11 @@ public class ChatServiceImpl implements ChatService {
     if (Boolean.TRUE.equals(membership.getIsOwner())) {
       throw AppException.badRequest("Trưởng nhóm không thể rời nhóm");
     }
+    if (!"GROUP".equals(membership.getRoom().getType())) {
+      throw AppException.badRequest("Chỉ có thể rời GROUP");
+    }
     membership.setIsActive(false);
+    membership.setLeftAt(LocalDateTime.now());
     memberRepo.save(membership);
     saveSystemMessage(membership.getRoom(), me.getFullName() + " đã rời nhóm.");
   }
@@ -377,9 +400,31 @@ public class ChatServiceImpl implements ChatService {
       throw AppException.forbidden("Chỉ trưởng nhóm được đổi tên nhóm");
     }
     ChatRoom room = membership.getRoom();
+    if (!"GROUP".equals(room.getType())) {
+      throw AppException.badRequest("Chỉ có thể đổi tên GROUP");
+    }
     room.setName(newName);
     roomRepo.save(room);
     saveSystemMessage(room, me.getFullName() + " đã đổi tên nhóm thành " + newName + ".");
+    return buildRoomResponse(membership, me.getId());
+  }
+
+  @Override
+  @Transactional
+  public RoomResponse updateGroupAvatar(Long roomId, String avatarUrl, String email) {
+    User me = findUser(email);
+    ChatRoomMember membership = assertActiveMember(roomId, me.getId());
+    if (!Boolean.TRUE.equals(membership.getIsOwner())) {
+      throw AppException.forbidden("Chỉ trưởng nhóm được đổi ảnh nhóm");
+    }
+    ChatRoom room = membership.getRoom();
+    if (!"GROUP".equals(room.getType())) {
+      throw AppException.badRequest("Chỉ có thể đổi ảnh GROUP");
+    }
+    String normalized = avatarUrl == null || avatarUrl.isBlank() ? null : avatarUrl.trim();
+    room.setAvatarUrl(normalized);
+    roomRepo.save(room);
+    saveSystemMessage(room, me.getFullName() + " đã cập nhật ảnh nhóm.");
     return buildRoomResponse(membership, me.getId());
   }
 
@@ -430,6 +475,7 @@ public class ChatServiceImpl implements ChatService {
     payload.put("senderId", response.getSenderId());
     payload.put("senderName", response.getSenderName());
     payload.put("senderAvatarInitial", response.getSenderAvatarInitial());
+    payload.put("senderAvatarUrl", response.getSenderAvatarUrl());
     payload.put("type", response.getType());
     payload.put("content", resolveSharedFileUrl(response.getContent()));
     payload.put("isRecalled", response.getIsRecalled());

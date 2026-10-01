@@ -107,6 +107,16 @@ public class ChatController {
         chatService.renameGroup(roomId, name, ud.getUsername())));
   }
 
+  @PatchMapping("/rooms/{roomId}/avatar")
+  public ResponseEntity<ApiResponse<RoomResponse>> updateAvatar(
+      @PathVariable Long workspaceId,
+      @PathVariable Long roomId,
+      @RequestParam(required = false) String avatarUrl,
+      @AuthenticationPrincipal UserDetails ud) {
+    return ResponseEntity.ok(ApiResponse.success(200, "OK",
+        chatService.updateGroupAvatar(roomId, avatarUrl, ud.getUsername())));
+  }
+
   @GetMapping("/rooms/{roomId}/members")
   public ResponseEntity<ApiResponse<Map<String, Object>>> getRoomMembers(
       @PathVariable Long workspaceId,

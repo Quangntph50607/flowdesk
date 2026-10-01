@@ -53,7 +53,7 @@
           id="ws_switch_menu"
           :model="wsSwitchMenuItems"
           :popup="true"
-          style="min-width: 220px"
+          style="min-width: 250px"
         >
           <template #item="{ item }">
             <div
@@ -164,9 +164,11 @@
             :shared-docs="groupSharedDocs"
             :current-user-id="currentUserId"
             :leaving="leavingRoom"
+            :updating-avatar="updatingGroupAvatar"
             @rename="handleRenameGroup"
             @remove-member="handleRemoveMember"
-            @open-add-member="showAddMember = true"
+            @open-add-member="openAddMemberDialog"
+            @update-avatar="handleUpdateGroupAvatar"
             @leave-room="handleLeaveRoom"
             @delete-room="handleDeleteRoom"
           />
@@ -235,6 +237,7 @@ const {
   sendWsFile,
   isConnected,
 } = useChat();
+const { uploadAvatar } = useFileUpload();
 
 // ── Workspace state ───────────────────────────────────────────────
 const loading = ref(true);
@@ -349,6 +352,7 @@ const loadingMore = ref(false);
 const creatingGroup = ref(false);
 const leavingRoom = ref(false);
 const addingMember = ref(false);
+const updatingGroupAvatar = ref(false);
 
 const showNewDirect = ref(false);
 const showCreateGroup = ref(false);
@@ -357,7 +361,14 @@ const showAddMember = ref(false);
 
 const workspaceMembers = ref<WorkspaceMember[]>([]);
 const groupMembers = ref<
-  { userId: number; fullName: string; isOwner: boolean }[]
+  {
+    userId: number;
+    fullName: string;
+    email?: string | null;
+    avatarInitial?: string | null;
+    avatarUrl?: string | null;
+    isOwner: boolean;
+  }[]
 >([]);
 const groupMemberCount = ref(0);
 const groupSharedMedia = ref<ChatMessage[]>([]);
@@ -391,6 +402,7 @@ async function loadWorkspaceMembers() {
       userId: m.userId,
       fullName: m.fullName,
       email: m.email,
+      avatarUrl: m.avatarUrl,
       roleCode: m.roleCode,
     }));
   } catch {
@@ -515,7 +527,7 @@ async function startDirect(targetUserId: number) {
     });
     const room = res.data.data;
     if (!chatStore.rooms.find((r: any) => r.id === room.id))
-      chatStore.rooms.unshift(room);
+      chatStore.prependRoom(room);
     await openRoom(room.id);
   } catch (e: any) {
     toast.add({
@@ -530,6 +542,7 @@ async function startDirect(targetUserId: number) {
 // ── Create group ──────────────────────────────────────────────────
 async function handleCreateGroup(payload: {
   name: string;
+  avatarUrl?: string | null;
   memberIds: number[];
 }) {
   creatingGroup.value = true;
@@ -539,7 +552,7 @@ async function handleCreateGroup(payload: {
       payload,
     );
     const room = res.data.data;
-    chatStore.rooms.unshift(room);
+    chatStore.prependRoom(room);
     showCreateGroup.value = false;
     await openRoom(room.id);
     toast.add({
@@ -581,6 +594,45 @@ async function handleRenameGroup(newName: string) {
   }
 }
 
+async function handleUpdateGroupAvatar(file: File) {
+  if (!chatStore.activeRoomId) return;
+  updatingGroupAvatar.value = true;
+  try {
+    const uploaded = await uploadAvatar(file);
+    if (!uploaded?.fileUrl) {
+      throw new Error("Upload failed");
+    }
+    const res = await api.patch(
+      `/api/workspaces/${wsId()}/chat/rooms/${chatStore.activeRoomId}/avatar`,
+      null,
+      { params: { avatarUrl: uploaded.fileUrl } },
+    );
+    chatStore.updateRoom(res.data.data);
+    toast.add({ severity: "success", summary: "Đã cập nhật ảnh nhóm", life: 2000 });
+  } catch (e: any) {
+    toast.add({
+      severity: "error",
+      summary: "Lỗi",
+      detail: e.response?.data?.message ?? "Không thể cập nhật ảnh nhóm",
+      life: 3000,
+    });
+  } finally {
+    updatingGroupAvatar.value = false;
+  }
+}
+
+async function openAddMemberDialog() {
+  const roomId = chatStore.activeRoomId;
+  if (!roomId) return;
+  addingMember.value = true;
+  try {
+    await Promise.all([loadWorkspaceMembers(), loadGroupMembers(roomId)]);
+    showAddMember.value = true;
+  } finally {
+    addingMember.value = false;
+  }
+}
+
 async function handleAddMembers(userIds: number[]) {
   if (!chatStore.activeRoomId) return;
   addingMember.value = true;
@@ -591,7 +643,10 @@ async function handleAddMembers(userIds: number[]) {
       );
     }
     showAddMember.value = false;
-    await loadGroupMembers(chatStore.activeRoomId);
+    await Promise.all([
+      loadWorkspaceMembers(),
+      loadGroupMembers(chatStore.activeRoomId),
+    ]);
     toast.add({
       severity: "success",
       summary: "Đã thêm thành viên",

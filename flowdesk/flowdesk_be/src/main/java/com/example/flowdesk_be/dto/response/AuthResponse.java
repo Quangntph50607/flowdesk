@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Getter
@@ -19,6 +20,9 @@ public class AuthResponse {
   private String email;
   private String fullName;
   private String avatarUrl;
+  private String phone;
+  private String address;
+  private LocalDate dateOfBirth;
   private String systemRole; // "SUPER_ADMIN" | null
 
   // Danh sách workspace user đang là thành viên (active)
