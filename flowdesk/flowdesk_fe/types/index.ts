@@ -10,6 +10,9 @@ export interface RegisterRequest {
   email: string;
   password: string;
   fullName: string;
+  phone?: string;
+  address?: string;
+  dateOfBirth?: string;
 }
 
 export interface AuthResponse {
@@ -26,6 +29,9 @@ export interface User {
   email: string;
   fullName: string;
   avatarUrl?: string;
+  phone?: string;
+  address?: string;
+  dateOfBirth?: string;
   role: "SUPER_ADMIN" | "USER";
   active: boolean;
 }
@@ -33,6 +39,9 @@ export interface User {
 export interface UpdateUserRequest {
   fullName?: string;
   avatarUrl?: string;
+  phone?: string;
+  address?: string;
+  dateOfBirth?: string;
 }
 
 // ========================

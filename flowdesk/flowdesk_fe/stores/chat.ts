@@ -1,6 +1,21 @@
 import { defineStore } from "pinia";
 import type { ChatRoom, ChatMessage } from "~/types/chat";
 
+function cleanUrl(url?: string | null): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  const markdownUrl = trimmed.match(/^\[[^\]]+\]\((https?:\/\/.+)\)$/);
+  return markdownUrl?.[1] ?? trimmed;
+}
+
+function normalizeRoom(room: ChatRoom): ChatRoom {
+  return {
+    ...room,
+    avatarUrl: cleanUrl(room.avatarUrl),
+    isOwner: room.isOwner ?? room.owner ?? false,
+  };
+}
+
 export const useChatStore = defineStore("chat", {
   state: () => ({
     rooms: [] as ChatRoom[],
@@ -25,7 +40,15 @@ export const useChatStore = defineStore("chat", {
 
   actions: {
     setRooms(rooms: ChatRoom[]) {
-      this.rooms = rooms;
+      this.rooms = rooms.map(normalizeRoom);
+    },
+
+    prependRoom(room: ChatRoom) {
+      const normalized = normalizeRoom(room);
+      this.rooms = [
+        normalized,
+        ...this.rooms.filter((r) => r.id !== normalized.id),
+      ];
     },
 
     setActiveRoom(id: number | null) {
@@ -83,8 +106,9 @@ export const useChatStore = defineStore("chat", {
     },
 
     updateRoom(updated: ChatRoom) {
+      const normalized = normalizeRoom(updated);
       const idx = this.rooms.findIndex((r) => r.id === updated.id);
-      if (idx !== -1) this.rooms[idx] = updated;
+      if (idx !== -1) this.rooms[idx] = { ...this.rooms[idx], ...normalized };
     },
 
     removeRoom(roomId: number) {

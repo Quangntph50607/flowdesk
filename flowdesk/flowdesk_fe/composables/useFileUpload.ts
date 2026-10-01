@@ -16,7 +16,8 @@ interface ApiUploadResponse {
 
 export const useFileUpload = () => {
   const config = useRuntimeConfig();
-  const token = useCookie("access_token");
+  const token = useAccessTokenCookie();
+  const api = useApi();
 
   const uploading = ref(false);
   const uploadProgress = ref(0);
@@ -65,7 +66,18 @@ export const useFileUpload = () => {
 
       if (!res.ok) throw new Error(`Upload thất bại (${res.status})`);
       const json = await res.json();
-      return json.data as UploadResult;
+      const uploaded = json.data as UploadResult;
+      const fileKey = extractFileKey(uploaded.fileUrl);
+      if (!fileKey) return uploaded;
+
+      const presigned = await api.get("/api/upload/presign", {
+        params: { key: fileKey },
+      });
+
+      return {
+        ...uploaded,
+        fileUrl: presigned.data.data,
+      };
     } catch (e: any) {
       console.error("[upload avatar] error:", e?.message);
       return null;
@@ -110,6 +122,17 @@ export const useFileUpload = () => {
       return JSON.parse(text);
     } catch {
       return {};
+    }
+  }
+
+  function extractFileKey(fileUrl: string) {
+    try {
+      const pathParts = new URL(fileUrl).pathname.split("/").filter(Boolean);
+      return pathParts[0] === "flowdesk-files"
+        ? pathParts.slice(1).join("/")
+        : pathParts.join("/");
+    } catch {
+      return null;
     }
   }
 

@@ -26,7 +26,13 @@
           v-if="isLastInGroup"
           class="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-slate-700 to-slate-500 text-white text-[11px] font-semibold flex items-center justify-center"
         >
-          {{ message.senderAvatarInitial }}
+          <img
+            v-if="message.senderAvatarUrl"
+            :src="message.senderAvatarUrl"
+            :alt="message.senderName"
+            class="w-full h-full rounded-full object-cover"
+          />
+          <span v-else>{{ message.senderAvatarInitial }}</span>
         </div>
       </div>
 

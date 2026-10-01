@@ -11,6 +11,7 @@ import com.example.flowdesk_be.repository.RefreshTokenRepository;
 import com.example.flowdesk_be.repository.UserRepository;
 import com.example.flowdesk_be.security.JwtUtil;
 import com.example.flowdesk_be.service.AuthService;
+import com.example.flowdesk_be.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -21,19 +22,26 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
+
+  private static final Pattern PHONE_PATTERN = Pattern.compile("0\\d{9,10}");
 
   private final UserRepository userRepository;
   private final RefreshTokenRepository refreshTokenRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtUtil jwtUtil;
   private final AuthenticationManager authenticationManager;
+  private final StorageService storageService;
 
   @Value("${app.jwt.refresh-expiration-days}")
   private long refreshExpirationDays;
+
+  @Value("${app.storage.b2.bucket-name}")
+  private String bucketName;
 
   @Override
   @Transactional
@@ -42,10 +50,20 @@ public class AuthServiceImpl implements AuthService {
       throw AppException.conflict("Email đã được sử dụng");
     }
 
+    String phone = blankToNull(request.getPhone());
+    String phoneNormalized = normalizePhoneOrThrow(phone);
+    if (phoneNormalized != null && userRepository.existsByPhoneNormalized(phoneNormalized)) {
+      throw AppException.conflict("Số điện thoại đã được sử dụng");
+    }
+
     User user = User.builder()
         .email(request.getEmail())
         .passwordHash(passwordEncoder.encode(request.getPassword()))
         .fullName(request.getFullName())
+        .phone(phone)
+        .phoneNormalized(phoneNormalized)
+        .address(blankToNull(request.getAddress()))
+        .dateOfBirth(request.getDateOfBirth())
         .isActive(true)
         .build();
 
@@ -146,8 +164,57 @@ public class AuthServiceImpl implements AuthService {
         user.getId(),
         user.getEmail(),
         user.getFullName(),
-        user.getAvatarUrl(),
+        resolveAvatarUrl(user.getAvatarUrl()),
+        user.getPhone(),
+        user.getAddress(),
+        user.getDateOfBirth(),
         user.getSystemRole(),
         workspaces);
+  }
+
+  private String resolveAvatarUrl(String avatarUrl) {
+    if (avatarUrl == null || !avatarUrl.contains("backblazeb2.com")) {
+      return avatarUrl;
+    }
+
+    try {
+      java.net.URI uri = java.net.URI.create(avatarUrl);
+      String path = uri.getPath();
+      String fileKey = extractFileKey(path);
+      return fileKey == null ? avatarUrl : storageService.generatePresignedUrl(fileKey);
+    } catch (Exception ignored) {
+      return avatarUrl;
+    }
+  }
+
+  private String extractFileKey(String path) {
+    String normalized = path.startsWith("/") ? path.substring(1) : path;
+    String bucketPrefix = bucketName + "/";
+    return normalized.startsWith(bucketPrefix)
+        ? normalized.substring(bucketPrefix.length())
+        : normalized;
+  }
+
+  private String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
+  }
+
+  private String normalizePhoneOrThrow(String phone) {
+    if (phone == null) {
+      return null;
+    }
+
+    String normalized = phone.replaceAll("[\\s.\\-()]", "");
+    if (normalized.startsWith("+84")) {
+      normalized = "0" + normalized.substring(3);
+    } else if (normalized.startsWith("84")) {
+      normalized = "0" + normalized.substring(2);
+    }
+
+    if (!PHONE_PATTERN.matcher(normalized).matches()) {
+      throw AppException.badRequest("Số điện thoại không đúng định dạng");
+    }
+
+    return normalized;
   }
 }

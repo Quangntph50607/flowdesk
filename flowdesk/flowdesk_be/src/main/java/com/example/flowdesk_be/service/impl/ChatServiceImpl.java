@@ -12,6 +12,7 @@ import com.example.flowdesk_be.service.ChatService;
 import com.example.flowdesk_be.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +37,9 @@ public class ChatServiceImpl implements ChatService {
   private final WorkspaceMemberRepository workspaceMemberRepo;
   private final WorkspaceRepository workspaceRepo;
   private final StorageService storageService;
+
+  @Value("${app.storage.b2.bucket-name}")
+  private String bucketName;
 
   // ── Helpers ──────────────────────────────────────────────────────
 
@@ -101,6 +105,7 @@ public class ChatServiceImpl implements ChatService {
     // Tên hiển thị: nếu DIRECT thì lấy tên người kia
     String name = room.getName();
     String avatarInitial = "?";
+    String avatarUrl = room.getAvatarUrl();
     if ("DIRECT".equals(room.getType())) {
       ChatRoomMember other = memberRepo.findByRoomIdAndIsActiveTrue(room.getId())
           .stream()
@@ -112,6 +117,7 @@ public class ChatServiceImpl implements ChatService {
         avatarInitial = name != null && !name.isEmpty()
             ? String.valueOf(name.charAt(0)).toUpperCase()
             : "?";
+        avatarUrl = other.getUser().getAvatarUrl();
       }
     } else if (name != null && !name.isEmpty()) {
       avatarInitial = String.valueOf(name.charAt(0)).toUpperCase();
@@ -131,6 +137,8 @@ public class ChatServiceImpl implements ChatService {
         .type(room.getType())
         .name(name)
         .avatarInitial(avatarInitial)
+        .avatarUrl(resolveSharedFileUrl(avatarUrl))
+        .description(room.getDescription())
         .lastMessage(last == null ? null
             : (last.getIsRecalled() ? "Tin nhắn đã được thu hồi" : last.getContent()))
         .lastMessageAt(last == null ? room.getCreatedAt() : last.getCreatedAt())
@@ -221,13 +229,15 @@ public class ChatServiceImpl implements ChatService {
         .workspace(effectiveWorkspace)
         .type("GROUP")
         .name(req.getName())
+        .avatarUrl(req.getAvatarUrl())
+        .description(req.getDescription())
         .createdBy(me)
         .build();
     room = roomRepo.save(room);
 
     // Thêm người tạo làm owner
     memberRepo.save(ChatRoomMember.builder()
-        .room(room).user(me).isOwner(true).build());
+        .room(room).user(me).isOwner(true).invitedBy(me).build());
 
     // Thêm các member được chọn
     final Long roomId = room.getId();
@@ -238,7 +248,9 @@ public class ChatServiceImpl implements ChatService {
       assertInWorkspace(effectiveWorkspaceId, memberId); // isolation
       memberRepo.save(ChatRoomMember.builder()
           .room(ChatRoom.builder().id(roomId).build())
-          .user(member).build());
+          .user(member)
+          .invitedBy(me)
+          .build());
     }
 
     // System message
@@ -317,6 +329,9 @@ public class ChatServiceImpl implements ChatService {
       throw AppException.forbidden("Chỉ trưởng nhóm được thêm thành viên");
     }
     ChatRoom room = myMembership.getRoom();
+    if (!"GROUP".equals(room.getType())) {
+      throw AppException.badRequest("Chỉ có thể thêm thành viên vào GROUP");
+    }
     assertInWorkspace(room.getWorkspace().getId(), targetUserId);
 
     if (memberRepo.existsByRoomIdAndUserIdAndIsActiveTrue(roomId, targetUserId)) {
@@ -328,9 +343,12 @@ public class ChatServiceImpl implements ChatService {
     memberRepo.findByRoomIdAndUserId(roomId, targetUserId).ifPresentOrElse(
         m -> {
           m.setIsActive(true);
+          m.setInvitedBy(me);
+          m.setRemovedBy(null);
+          m.setLeftAt(null);
           memberRepo.save(m);
         },
-        () -> memberRepo.save(ChatRoomMember.builder().room(room).user(target).build()));
+        () -> memberRepo.save(ChatRoomMember.builder().room(room).user(target).invitedBy(me).build()));
 
     saveSystemMessage(room, me.getFullName() + " đã thêm " + target.getFullName() + " vào nhóm.");
   }
@@ -346,8 +364,13 @@ public class ChatServiceImpl implements ChatService {
     if (me.getId().equals(targetUserId)) {
       throw AppException.badRequest("Trưởng nhóm không thể tự xóa mình");
     }
+    if (!"GROUP".equals(myMembership.getRoom().getType())) {
+      throw AppException.badRequest("Chỉ có thể xóa thành viên khỏi GROUP");
+    }
     ChatRoomMember target = assertActiveMember(roomId, targetUserId);
     target.setIsActive(false);
+    target.setRemovedBy(me);
+    target.setLeftAt(LocalDateTime.now());
     memberRepo.save(target);
 
     User targetUser = target.getUser();
@@ -363,7 +386,11 @@ public class ChatServiceImpl implements ChatService {
     if (Boolean.TRUE.equals(membership.getIsOwner())) {
       throw AppException.badRequest("Trưởng nhóm không thể rời nhóm");
     }
+    if (!"GROUP".equals(membership.getRoom().getType())) {
+      throw AppException.badRequest("Chỉ có thể rời GROUP");
+    }
     membership.setIsActive(false);
+    membership.setLeftAt(LocalDateTime.now());
     memberRepo.save(membership);
     saveSystemMessage(membership.getRoom(), me.getFullName() + " đã rời nhóm.");
   }
@@ -377,9 +404,31 @@ public class ChatServiceImpl implements ChatService {
       throw AppException.forbidden("Chỉ trưởng nhóm được đổi tên nhóm");
     }
     ChatRoom room = membership.getRoom();
+    if (!"GROUP".equals(room.getType())) {
+      throw AppException.badRequest("Chỉ có thể đổi tên GROUP");
+    }
     room.setName(newName);
     roomRepo.save(room);
     saveSystemMessage(room, me.getFullName() + " đã đổi tên nhóm thành " + newName + ".");
+    return buildRoomResponse(membership, me.getId());
+  }
+
+  @Override
+  @Transactional
+  public RoomResponse updateGroupAvatar(Long roomId, String avatarUrl, String email) {
+    User me = findUser(email);
+    ChatRoomMember membership = assertActiveMember(roomId, me.getId());
+    if (!Boolean.TRUE.equals(membership.getIsOwner())) {
+      throw AppException.forbidden("Chỉ trưởng nhóm được đổi ảnh nhóm");
+    }
+    ChatRoom room = membership.getRoom();
+    if (!"GROUP".equals(room.getType())) {
+      throw AppException.badRequest("Chỉ có thể đổi ảnh GROUP");
+    }
+    String normalized = avatarUrl == null || avatarUrl.isBlank() ? null : avatarUrl.trim();
+    room.setAvatarUrl(normalized);
+    roomRepo.save(room);
+    saveSystemMessage(room, me.getFullName() + " đã cập nhật ảnh nhóm.");
     return buildRoomResponse(membership, me.getId());
   }
 
@@ -389,7 +438,11 @@ public class ChatServiceImpl implements ChatService {
     assertActiveMember(roomId, me.getId());
     List<GroupMemberResponse> members = memberRepo.findByRoomIdAndIsActiveTrue(roomId)
         .stream()
-        .map(GroupMemberResponse::from)
+        .map(member -> {
+          GroupMemberResponse response = GroupMemberResponse.from(member);
+          response.setAvatarUrl(resolveSharedFileUrl(response.getAvatarUrl()));
+          return response;
+        })
         .toList();
 
     List<Map<String, Object>> media = new ArrayList<>();
@@ -430,6 +483,7 @@ public class ChatServiceImpl implements ChatService {
     payload.put("senderId", response.getSenderId());
     payload.put("senderName", response.getSenderName());
     payload.put("senderAvatarInitial", response.getSenderAvatarInitial());
+    payload.put("senderAvatarUrl", response.getSenderAvatarUrl());
     payload.put("type", response.getType());
     payload.put("content", resolveSharedFileUrl(response.getContent()));
     payload.put("isRecalled", response.getIsRecalled());
@@ -441,8 +495,7 @@ public class ChatServiceImpl implements ChatService {
   }
 
   private String resolveSharedFileUrl(String rawUrl) {
-    if (rawUrl == null || !rawUrl.contains("backblazeb2.com") || rawUrl.contains("X-Amz-Signature")
-        || rawUrl.contains("x-amz-signature")) {
+    if (rawUrl == null || !rawUrl.contains("backblazeb2.com")) {
       return rawUrl;
     }
     String fileKey = extractB2FileKey(rawUrl);
@@ -463,8 +516,11 @@ public class ChatServiceImpl implements ChatService {
       if (path == null || path.isBlank()) {
         return null;
       }
-      String[] parts = path.startsWith("/") ? path.substring(1).split("/", 2) : path.split("/", 2);
-      return parts.length == 2 ? parts[1] : null;
+      String normalized = path.startsWith("/") ? path.substring(1) : path;
+      String bucketPrefix = bucketName + "/";
+      return normalized.startsWith(bucketPrefix)
+          ? normalized.substring(bucketPrefix.length())
+          : normalized;
     } catch (Exception ignored) {
       return null;
     }

@@ -3,7 +3,7 @@
     :visible="visible"
     header="Thêm người dùng"
     modal
-    style="width: 440px"
+    style="width: 560px"
     @update:visible="$emit('update:visible', $event)"
   >
     <div class="flex flex-col gap-4 pt-2">
@@ -29,6 +29,24 @@
           placeholder="Ít nhất 6 ký tự"
         />
       </div>
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium">Số điện thoại</label>
+          <InputText v-model="form.phone" fluid placeholder="0901234567" />
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-sm font-medium">Ngày sinh</label>
+          <InputText v-model="form.dateOfBirth" type="date" fluid />
+        </div>
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-sm font-medium">Địa chỉ</label>
+        <InputText
+          v-model="form.address"
+          fluid
+          placeholder="Số nhà, phường/xã, tỉnh/thành"
+        />
+      </div>
     </div>
     <template #footer>
       <Button
@@ -49,7 +67,6 @@
 </template>
 
 <script setup lang="ts">
-
 const props = defineProps<{ visible: boolean }>();
 const emit = defineEmits<{
   (e: "update:visible", val: boolean): void;
@@ -60,16 +77,45 @@ const api = useApi();
 const toast = useAppToast();
 const loading = ref(false);
 
-const form = reactive({ fullName: "", email: "", password: "" });
+const form = reactive({
+  fullName: "",
+  email: "",
+  password: "",
+  phone: "",
+  address: "",
+  dateOfBirth: "",
+});
+
+const PHONE_PATTERN = /^0\d{9,10}$/;
+
+function resetForm() {
+  form.fullName = "";
+  form.email = "";
+  form.password = "";
+  form.phone = "";
+  form.address = "";
+  form.dateOfBirth = "";
+}
+
+function normalizePhone(phone: string) {
+  let normalized = phone.trim().replace(/[\s.\-()]/g, "");
+  if (normalized.startsWith("+84")) {
+    normalized = `0${normalized.slice(3)}`;
+  } else if (normalized.startsWith("84")) {
+    normalized = `0${normalized.slice(2)}`;
+  }
+  return normalized;
+}
+
+function isValidPhone(phone: string) {
+  if (!phone.trim()) return true;
+  return PHONE_PATTERN.test(normalizePhone(phone));
+}
 
 watch(
   () => props.visible,
-  (val) => {
-    if (val) {
-      form.fullName = "";
-      form.email = "";
-      form.password = "";
-    }
+  (visible) => {
+    if (visible) resetForm();
   },
 );
 
@@ -78,7 +124,16 @@ async function handleSubmit() {
     toast.add({
       severity: "warn",
       summary: "Thiếu thông tin",
-      detail: "Vui lòng điền đầy đủ thông tin",
+      detail: "Vui lòng điền đầy đủ họ tên, email và mật khẩu",
+      life: 3000,
+    });
+    return;
+  }
+  if (!isValidPhone(form.phone)) {
+    toast.add({
+      severity: "warn",
+      summary: "Số điện thoại chưa hợp lệ",
+      detail: "SĐT phải có 10-11 số, bắt đầu bằng 0 hoặc +84",
       life: 3000,
     });
     return;
@@ -86,9 +141,12 @@ async function handleSubmit() {
   loading.value = true;
   try {
     await api.post("/api/auth/register", {
-      fullName: form.fullName,
-      email: form.email,
+      fullName: form.fullName.trim(),
+      email: form.email.trim(),
       password: form.password,
+      phone: form.phone.trim() || null,
+      address: form.address.trim() || null,
+      dateOfBirth: form.dateOfBirth || null,
     });
     toast.add({
       severity: "success",
@@ -96,6 +154,7 @@ async function handleSubmit() {
       detail: "Đã tạo người dùng mới",
       life: 3000,
     });
+    resetForm();
     emit("update:visible", false);
     emit("created");
   } catch (err: any) {

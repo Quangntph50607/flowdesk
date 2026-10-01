@@ -1,7 +1,7 @@
 <template>
   <Dialog
     :visible="visible"
-    header="Cập nhật người dùng"
+    header="Thông tin cá nhân"
     modal
     style="width: 560px"
     @update:visible="$emit('update:visible', $event)"
@@ -47,15 +47,15 @@
           <Button
             v-if="form.avatarUrl"
             label="Xóa ảnh"
-            icon="fa-solid fa-trash"
+            icon="pi pi-times"
             text
             size="small"
             severity="secondary"
             @click="form.avatarUrl = ''"
-            class="!text-sm !text-red-500"
           />
         </div>
       </div>
+
       <div class="flex flex-col gap-1">
         <label class="text-sm font-medium">Họ và tên</label>
         <InputText v-model="form.fullName" fluid />
@@ -87,6 +87,7 @@
         <InputText v-model="form.address" fluid />
       </div>
     </div>
+
     <template #footer>
       <Button
         label="Hủy"
@@ -106,28 +107,17 @@
 </template>
 
 <script setup lang="ts">
-type EditableUser = {
-  id: number;
-  fullName: string;
-  email: string;
-  avatarUrl?: string | null;
-  phone?: string | null;
-  address?: string | null;
-  dateOfBirth?: string | null;
-};
-
-const props = defineProps<{
-  visible: boolean;
-  user: EditableUser | null;
-}>();
+const props = defineProps<{ visible: boolean }>();
 const emit = defineEmits<{
   (e: "update:visible", val: boolean): void;
   (e: "updated"): void;
 }>();
 
 const api = useApi();
+const authStore = useAuthStore();
 const toast = useAppToast();
 const { uploadAvatar } = useFileUpload();
+
 const loading = ref(false);
 const uploadingAvatar = ref(false);
 const avatarLoadFailed = ref(false);
@@ -139,7 +129,7 @@ const form = reactive({
   avatarUrl: "",
   phone: "",
   address: "",
-  dateOfBirth: "",
+  dateOfBirth: "" as string | Date | null,
 });
 
 const avatarInitial = computed(
@@ -148,6 +138,34 @@ const avatarInitial = computed(
 const avatarPreviewUrl = computed(() => form.avatarUrl);
 
 const PHONE_PATTERN = /^0\d{9,10}$/;
+
+watch(
+  () => props.visible,
+  async (visible) => {
+    if (visible) {
+      await authStore.fetchMe();
+      fillForm();
+    }
+  },
+);
+
+watch(
+  () => authStore.currentUser,
+  () => {
+    if (props.visible) fillForm();
+  },
+);
+
+function fillForm() {
+  const user = authStore.currentUser;
+  form.fullName = user?.fullName ?? "";
+  form.email = user?.email ?? "";
+  form.avatarUrl = user?.avatarUrl ?? "";
+  form.phone = user?.phone ?? "";
+  form.address = user?.address ?? "";
+  form.dateOfBirth = user?.dateOfBirth ?? "";
+  avatarLoadFailed.value = false;
+}
 
 function normalizePhone(phone: string) {
   let normalized = phone.trim().replace(/[\s.\-()]/g, "");
@@ -175,54 +193,6 @@ function toDatePayload(value: string | Date | null) {
   return value;
 }
 
-watch(
-  () => props.visible,
-  async (visible) => {
-    if (visible && props.user?.id) {
-      fillForm(props.user);
-      await fetchUserDetail(props.user.id);
-    }
-  },
-);
-
-watch(
-  () => props.user?.id,
-  async (id) => {
-    if (props.visible && id) {
-      fillForm(props.user);
-      await fetchUserDetail(id);
-    }
-  },
-);
-
-function fillForm(user: EditableUser | null | undefined) {
-  if (!user) return;
-  form.fullName = user.fullName;
-  form.email = user.email;
-  form.avatarUrl = user.avatarUrl ?? "";
-  form.phone = user.phone ?? "";
-  form.address = user.address ?? "";
-  form.dateOfBirth = user.dateOfBirth ?? "";
-  avatarLoadFailed.value = false;
-}
-
-async function fetchUserDetail(id: number) {
-  loading.value = true;
-  try {
-    const res = await api.get(`/api/admin/users/${id}`);
-    fillForm(res.data.data);
-  } catch {
-    toast.add({
-      severity: "error",
-      summary: "Lá»—i",
-      detail: "KhÃ´ng thá»ƒ táº£i thÃ´ng tin ngÆ°á»i dÃ¹ng",
-      life: 3000,
-    });
-  } finally {
-    loading.value = false;
-  }
-}
-
 async function handleAvatarChange(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
   if (!file) return;
@@ -235,8 +205,8 @@ async function handleAvatarChange(event: Event) {
   } catch {
     toast.add({
       severity: "error",
-      summary: "Lá»—i",
-      detail: "KhÃ´ng thá»ƒ táº£i áº£nh Ä‘áº¡i diá»‡n",
+      summary: "Lỗi",
+      detail: "Không thể tải ảnh đại diện",
       life: 3000,
     });
   } finally {
@@ -246,7 +216,6 @@ async function handleAvatarChange(event: Event) {
 }
 
 async function handleSubmit() {
-  if (!props.user) return;
   if (!isValidPhone(form.phone)) {
     toast.add({
       severity: "warn",
@@ -259,17 +228,18 @@ async function handleSubmit() {
 
   loading.value = true;
   try {
-    await api.patch(`/api/admin/users/${props.user.id}`, {
+    await api.patch("/api/me", {
       fullName: form.fullName.trim(),
       avatarUrl: form.avatarUrl || null,
       phone: form.phone.trim() || null,
       address: form.address.trim() || null,
       dateOfBirth: toDatePayload(form.dateOfBirth),
     });
+    await authStore.fetchMe();
     toast.add({
       severity: "success",
       summary: "Thành công",
-      detail: "Đã cập nhật người dùng",
+      detail: "Đã cập nhật thông tin cá nhân",
       life: 3000,
     });
     emit("update:visible", false);

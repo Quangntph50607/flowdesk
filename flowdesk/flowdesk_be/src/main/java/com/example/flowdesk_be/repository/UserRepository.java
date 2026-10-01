@@ -1,6 +1,8 @@
 package com.example.flowdesk_be.repository;
 
 import com.example.flowdesk_be.entity.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -13,7 +15,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
   boolean existsByEmail(String email);
 
-  List<User> findByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCase(String email, String fullName);
+  boolean existsByPhoneNormalized(String phoneNormalized);
+
+  boolean existsByPhoneNormalizedAndIdNot(String phoneNormalized, Long id);
+
+  Page<User> findByEmailContainingIgnoreCaseOrFullNameContainingIgnoreCase(String email, String fullName, Pageable pageable);
 
   // User chưa là member của workspace chỉ định (dùng cho add-member dialog)
   @org.springframework.data.jpa.repository.Query("""
@@ -28,7 +34,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
           or lower(u.fullName) like lower(concat('%', :search, '%')))
       order by u.fullName
       """)
-  List<User> findAvailableForWorkspace(
+  Page<User> findAvailableForWorkspace(
       @org.springframework.data.repository.query.Param("workspaceId") Long workspaceId,
-      @org.springframework.data.repository.query.Param("search") String search);
+      @org.springframework.data.repository.query.Param("search") String search,
+      Pageable pageable);
 }

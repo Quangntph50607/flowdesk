@@ -11,6 +11,8 @@ public class RoomResponse {
     private String type;           // "DIRECT" | "GROUP"
     private String name;           // tên group, hoặc fullName của người kia (DIRECT)
     private String avatarInitial;  // ký tự đầu để hiển thị avatar
+    private String avatarUrl;
+    private String description;
     private String lastMessage;
     private LocalDateTime lastMessageAt;
     private int unreadCount;

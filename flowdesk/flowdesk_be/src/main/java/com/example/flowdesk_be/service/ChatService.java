@@ -30,6 +30,8 @@ public interface ChatService {
 
   RoomResponse renameGroup(Long roomId, String newName, String email);
 
+  RoomResponse updateGroupAvatar(Long roomId, String avatarUrl, String email);
+
   Map<String, Object> getRoomMembers(Long roomId, String email);
 
   void deleteRoom(Long roomId, String email);

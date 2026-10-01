@@ -1,9 +1,20 @@
 export default defineNuxtRouteMiddleware(async () => {
-  const token = useCookie("access_token");
-  if (token.value) {
-    const authStore = useAuthStore();
+  const authStore = useAuthStore();
+  const accessToken = useAccessTokenCookie();
+  const refreshToken = useRefreshTokenCookie();
+
+  if (!accessToken.value && refreshToken.value) {
+    await authStore.refreshSession();
+  }
+
+  if (accessToken.value) {
     if (!authStore.currentUser) {
       await authStore.fetchMe();
+    }
+
+    if (!authStore.currentUser) {
+      clearAuthCookies();
+      return;
     }
 
     if (

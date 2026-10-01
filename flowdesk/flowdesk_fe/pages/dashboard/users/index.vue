@@ -29,55 +29,94 @@
         </div>
       </template>
       <template #content>
-        <DataTable
-          :value="users"
-          :loading="loading"
-          paginator
-          :rows="10"
-          striped-rows
-          data-key="id"
-        >
-          <Column field="fullName" header="Họ tên" sortable />
-          <Column field="email" header="Email" sortable />
-          <Column field="updatedAt" header="Cập nhật" style="width: 130px">
-            <template #body="{ data }">
-              {{ formatDateTime(data.updatedAt) }}
-            </template>
-          </Column>
-          <Column field="active" header="Trạng thái" style="width: 120px">
-            <template #body="{ data }">
-              <Tag
-                :value="data.active ? 'Ngưng hoạt động' : 'Hoạt động'"
-                :severity="data.active ? 'danger' : 'success'"
-              />
-            </template>
-          </Column>
-          <Column header="Hành động" style="width: 100px">
-            <template #body="{ data }">
-              <div class="flex items-center gap-1">
-                <Button
-                  icon="pi pi-pencil"
-                  text
-                  rounded
-                  size="small"
-                  severity="warn"
-                  v-tooltip.top="'Chỉnh sửa'"
-                  @click="openEdit(data)"
+        <div class="overflow-x-auto">
+          <DataTable
+            :value="users"
+            :loading="loading"
+            lazy
+            paginator
+            :rows="10"
+            :total-records="totalUsers"
+            :first="tableFirst"
+            striped-rows
+            data-key="id"
+            class="min-w-[1000px]"
+            @page="onPage"
+          >
+            <Column field="fullName" header="Họ tên" sortable>
+              <template #body="{ data }">
+                <div class="flex items-center gap-2">
+                  <img
+                    v-if="data.avatarUrl"
+                    :src="data.avatarUrl"
+                    :alt="data.fullName"
+                    class="w-8 h-8 rounded-full object-cover"
+                  />
+                  <span
+                    v-else
+                    class="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold"
+                  >
+                    {{ data.fullName?.charAt(0).toUpperCase() || "?" }}
+                  </span>
+
+                  <div>
+                    <p>{{ data.fullName || "—" }}</p>
+                    <p>{{ data.phone || "" }}</p>
+                  </div>
+                </div>
+              </template>
+            </Column>
+            <Column field="email" header="Email" sortable />
+            <Column field="dateOfBirth" header="Ngày sinh" style="width: 130px">
+              <template #body="{ data }">
+                {{ formatDate(data.dateOfBirth) }}
+              </template>
+            </Column>
+            <Column field="address" header="Địa chỉ">
+              <template #body="{ data }">
+                <span class="line-clamp-2">{{ data.address || "—" }}</span>
+              </template>
+            </Column>
+            <Column field="updatedAt" header="Cập nhật" style="width: 130px">
+              <template #body="{ data }">
+                {{ formatDateTime(data.updatedAt) }}
+              </template>
+            </Column>
+            <Column field="active" header="Trạng thái" style="width: 150px">
+              <template #body="{ data }">
+                <Tag
+                  :value="isUserActive(data) ? 'Hoạt động' : 'Ngừng hoạt động'"
+                  :severity="isUserActive(data) ? 'success' : 'danger'"
                 />
-                <ToggleSwitch
-                  :model-value="!data.active"
-                  @update:model-value="toggleUser(data)"
-                />
+              </template>
+            </Column>
+            <Column header="Hành động" style="width: 100px">
+              <template #body="{ data }">
+                <div class="flex items-center gap-1">
+                  <Button
+                    icon="pi pi-pencil"
+                    text
+                    rounded
+                    size="small"
+                    severity="warn"
+                    v-tooltip.top="'Chỉnh sửa'"
+                    @click="openEdit(data)"
+                  />
+                  <ToggleSwitch
+                    :model-value="isUserActive(data)"
+                    @update:model-value="toggleUser(data)"
+                  />
+                </div>
+              </template>
+            </Column>
+            <template #empty>
+              <div class="text-center py-10 text-surface-400">
+                <i class="pi pi-users text-4xl mb-3 block" />
+                Không có dữ liệu
               </div>
             </template>
-          </Column>
-          <template #empty>
-            <div class="text-center py-10 text-surface-400">
-              <i class="pi pi-users text-4xl mb-3 block" />
-              Không có dữ liệu
-            </div>
-          </template>
-        </DataTable>
+          </DataTable>
+        </div>
       </template>
     </Card>
 
@@ -92,7 +131,6 @@
 </template>
 
 <script setup lang="ts">
-
 definePageMeta({ middleware: "auth" });
 
 const api = useApi();
@@ -104,6 +142,9 @@ onMounted(() => {
 });
 
 const users = ref<any[]>([]);
+const totalUsers = ref(0);
+const currentPage = ref(1);
+const tableFirst = computed(() => (currentPage.value - 1) * 10);
 const loading = ref(false);
 const search = ref("");
 const showCreate = ref(false);
@@ -115,9 +156,14 @@ async function fetchUsers() {
   loading.value = true;
   try {
     const res = await api.get("/api/admin/users", {
-      params: { search: search.value.trim() || undefined },
+      params: {
+        search: search.value.trim() || undefined,
+        limit: 10,
+        page: currentPage.value,
+      },
     });
-    users.value = res.data.data ?? [];
+    users.value = getPageItems(res.data.data);
+    totalUsers.value = getPageTotal(res.data.data);
   } catch {
     toast.add({
       severity: "error",
@@ -132,12 +178,33 @@ async function fetchUsers() {
 
 watch(search, () => {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(fetchUsers, 1000);
+  searchTimer = setTimeout(() => {
+    currentPage.value = 1;
+    fetchUsers();
+  }, 1000);
 });
+
+function onPage(event: { page: number }) {
+  currentPage.value = event.page + 1;
+  fetchUsers();
+}
 
 function openEdit(user: any) {
   editingUser.value = user;
   showEdit.value = true;
+}
+
+function isUserActive(user: any) {
+  return user.isActive ?? user.active ?? false;
+}
+
+function formatDate(dateStr?: string | null) {
+  if (!dateStr) return "—";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(dateStr));
 }
 
 async function toggleUser(user: any) {

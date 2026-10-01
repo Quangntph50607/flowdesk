@@ -13,6 +13,7 @@ public class MessageResponse {
   private Long senderId;
   private String senderName;
   private String senderAvatarInitial;
+  private String senderAvatarUrl;
   private String type;
   private String content;
   private Boolean isRecalled;
@@ -33,6 +34,7 @@ public class MessageResponse {
             msg.getSender().getFullName() != null
                 ? String.valueOf(msg.getSender().getFullName().charAt(0)).toUpperCase()
                 : "?")
+        .senderAvatarUrl(msg.getSender().getAvatarUrl())
         .type(msg.getType())
         .content(msg.getIsRecalled() ? null : msg.getContent())
         .isRecalled(msg.getIsRecalled())

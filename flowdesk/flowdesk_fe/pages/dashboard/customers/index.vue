@@ -388,8 +388,10 @@ function validateTagPayload(tag: { name?: string; color?: string }, errors: Reco
 
 async function loadWorkspaceOptions() {
   if (authStore.isSuperAdmin) {
-    const res = await api.get("/api/admin/workspaces");
-    workspaceOptions.value = res.data.data ?? [];
+    const res = await api.get("/api/admin/workspaces", {
+      params: { limit: 20, page: 1 },
+    });
+    workspaceOptions.value = getPageItems(res.data.data);
     return;
   }
 
@@ -467,8 +469,10 @@ async function loadBranchesForWorkspace(workspaceId: number | null) {
     branchOptions.value = [];
     return;
   }
-  const res = await api.get(`/api/workspaces/${workspaceId}/branches`);
-  branchOptions.value = res.data.data ?? [];
+  const res = await api.get(`/api/workspaces/${workspaceId}/branches`, {
+    params: { limit: 20, page: 1 },
+  });
+  branchOptions.value = getPageItems(res.data.data);
 }
 
 async function loadTagsForWorkspace(workspaceId: number | null) {
@@ -480,8 +484,10 @@ async function loadTagsForWorkspace(workspaceId: number | null) {
 
 async function fetchTagsForWorkspace(workspaceId: number | null) {
   if (!workspaceId) return [];
-  const res = await api.get(`/api/workspaces/${workspaceId}/customer-tags`);
-  return res.data.data ?? [];
+  const res = await api.get(`/api/workspaces/${workspaceId}/customer-tags`, {
+    params: { limit: 20, page: 1 },
+  });
+  return getPageItems(res.data.data);
 }
 
 async function loadMembersForWorkspace(
@@ -495,9 +501,11 @@ async function loadMembersForWorkspace(
   const res = await api.get(`/api/workspaces/${workspaceId}/all-members`, {
     params: {
       branchId: branchId ?? undefined,
+      limit: 20,
+      page: 1,
     },
   });
-  allMembers.value = res.data.data ?? [];
+  allMembers.value = getPageItems(res.data.data);
 }
 
 function debouncedFetch() {
@@ -515,9 +523,11 @@ async function fetchCustomers() {
         search: filters.search.trim() || undefined,
         status: filters.status ?? undefined,
         tagId: filters.tagId ?? undefined,
+        limit: 10,
+        page: 1,
       },
     });
-    customers.value = res.data.data ?? [];
+    customers.value = getPageItems(res.data.data);
   } catch {
     toast.add({
       severity: "error",
@@ -791,7 +801,7 @@ async function fetchActivities(customerId: number) {
     const res = await api.get(
       `/api/workspaces/${form.workspaceId}/customers/${customerId}/activities`,
     );
-    activities.value = res.data.data ?? [];
+    activities.value = getPageItems(res.data.data);
   } catch {
     activities.value = [];
   }

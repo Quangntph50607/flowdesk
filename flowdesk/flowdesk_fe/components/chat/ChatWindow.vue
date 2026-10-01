@@ -7,7 +7,14 @@
       <div class="flex items-center gap-3 min-w-0">
         <!-- Avatar -->
         <div class="relative shrink-0">
+          <img
+            v-if="room.avatarUrl"
+            :src="room.avatarUrl"
+            :alt="room.name"
+            class="w-[40px] h-[40px] rounded-full"
+          />
           <div
+            v-else
             class="w-[40px] h-[40px] rounded-full bg-gradient-to-br from-slate-700 to-slate-500 text-white text-[14px] font-bold flex items-center justify-center"
           >
             {{ room.avatarInitial }}

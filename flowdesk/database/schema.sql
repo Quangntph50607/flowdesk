@@ -29,6 +29,10 @@ CREATE TABLE users (
     password_hash NVARCHAR(255) NOT NULL,
     full_name     NVARCHAR(150) NOT NULL,
     avatar_url    NVARCHAR(500) NULL,
+    phone         NVARCHAR(40)  NULL,
+    phone_normalized NVARCHAR(20) NULL,
+    address       NVARCHAR(500) NULL,
+    date_of_birth DATE          NULL,
     system_role   NVARCHAR(50)  NULL,       -- NULL | 'SUPER_ADMIN'
     is_active     BIT           NOT NULL DEFAULT 1,
     created_at    DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
@@ -189,6 +193,7 @@ GO
 CREATE INDEX IX_workspaces_parent     ON workspaces(parent_id);
 CREATE INDEX IX_wm_workspace          ON workspace_members(workspace_id);
 CREATE INDEX IX_wm_user               ON workspace_members(user_id);
+CREATE UNIQUE INDEX UX_users_phone_normalized ON users(phone_normalized) WHERE phone_normalized IS NOT NULL;
 CREATE INDEX IX_customers_workspace   ON customers(workspace_id);
 CREATE INDEX IX_customers_branch      ON customers(branch_id);
 CREATE INDEX IX_customers_status      ON customers(status);

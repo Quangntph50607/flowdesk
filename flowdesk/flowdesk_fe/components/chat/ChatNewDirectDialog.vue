@@ -38,7 +38,13 @@
               font-size: 13px;
             "
           >
-            {{ m.fullName?.charAt(0).toUpperCase() }}
+            <img
+              v-if="m.avatarUrl"
+              :src="m.avatarUrl"
+              :alt="m.fullName"
+              class="w-full h-full rounded-full object-cover"
+            />
+            <span v-else>{{ m.fullName?.charAt(0).toUpperCase() }}</span>
           </div>
           <div class="min-w-0">
             <p class="text-sm font-medium truncate" style="color: #0f172a">

@@ -1,6 +1,7 @@
 package com.example.flowdesk_be.service;
 
 import com.example.flowdesk_be.dto.request.UpdateUserRequest;
+import com.example.flowdesk_be.dto.response.PageResponse;
 import com.example.flowdesk_be.dto.response.UserResponse;
 
 import java.util.List;
@@ -10,9 +11,7 @@ public interface UserService {
 
   UserResponse updateMe(String email, UpdateUserRequest request);
 
-  List<UserResponse> getAllUsers();
-
-  List<UserResponse> getAllUsers(String search);
+  PageResponse<UserResponse> getAllUsers(String search, Integer limit, Integer page);
 
   UserResponse getUserById(Long id);
 
@@ -27,5 +26,5 @@ public interface UserService {
    * Dùng cho dialog "Thêm thành viên" — accessible bởi OWNER/ADMIN, không chỉ
    * SUPER_ADMIN.
    */
-  List<UserResponse> getAvailableUsersForWorkspace(Long workspaceId, String search);
+  PageResponse<UserResponse> getAvailableUsersForWorkspace(Long workspaceId, String search, Integer limit, Integer page);
 }

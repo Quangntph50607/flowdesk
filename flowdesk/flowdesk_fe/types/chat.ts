@@ -7,10 +7,13 @@ export interface ChatRoom {
   type: "DIRECT" | "GROUP";
   name: string;
   avatarInitial: string;
+  avatarUrl?: string | null;
+  description?: string | null;
   lastMessage: string | null;
   lastMessageAt: string | null;
   unreadCount: number;
   isOwner: boolean;
+  owner?: boolean;
   memberCount?: number;
 }
 
@@ -20,6 +23,7 @@ export interface ChatMessage {
   senderId: number;
   senderName: string;
   senderAvatarInitial: string;
+  senderAvatarUrl?: string | null;
   type: "TEXT" | "IMAGE" | "FILE" | "VIDEO" | "AUDIO" | "SYSTEM";
   content: string | null;
   isRecalled: boolean;
@@ -41,6 +45,7 @@ export interface WorkspaceMember {
   userId: number;
   fullName: string;
   email: string;
+  avatarUrl?: string | null;
   roleCode: string;
   branchLabels?: string;
 }

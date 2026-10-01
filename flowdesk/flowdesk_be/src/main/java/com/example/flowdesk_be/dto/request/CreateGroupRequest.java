@@ -2,6 +2,7 @@ package com.example.flowdesk_be.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 import java.util.List;
@@ -11,6 +12,12 @@ import java.util.List;
 public class CreateGroupRequest {
     @NotBlank(message = "Tên nhóm không được để trống")
     private String name;
+
+    @Size(max = 500)
+    private String avatarUrl;
+
+    @Size(max = 500)
+    private String description;
 
     @NotEmpty(message = "Phải chọn ít nhất 1 thành viên")
     private List<Long> memberIds;

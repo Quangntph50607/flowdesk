@@ -85,7 +85,13 @@
                 : ''
             "
           >
-            {{ room.avatarInitial }}
+            <img
+              v-if="room.avatarUrl"
+              :src="room.avatarUrl"
+              :alt="room.name"
+              class="w-full h-full rounded-full object-cover"
+            />
+            <span v-else>{{ room.avatarInitial }}</span>
           </div>
           <span
             class="absolute bottom-[1px] right-[1px] w-[10px] h-[10px] rounded-full bg-green-500 border-2 border-white"
