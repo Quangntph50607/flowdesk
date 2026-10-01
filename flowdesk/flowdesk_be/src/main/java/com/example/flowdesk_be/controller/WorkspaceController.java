@@ -6,6 +6,7 @@ import com.example.flowdesk_be.dto.request.UpdateWorkspaceRequest;
 import com.example.flowdesk_be.dto.response.ApiResponse;
 import com.example.flowdesk_be.dto.response.MemberGroupResponse;
 import com.example.flowdesk_be.dto.response.MemberResponse;
+import com.example.flowdesk_be.dto.response.PageResponse;
 import com.example.flowdesk_be.dto.response.UserResponse;
 import com.example.flowdesk_be.dto.response.WorkspaceResponse;
 import com.example.flowdesk_be.service.MemberService;
@@ -55,10 +56,12 @@ public class WorkspaceController {
   @Tag(name = "Admin – Workspaces")
   @Operation(summary = "Danh sách tất cả workspace tổng (kèm chi nhánh)")
   @GetMapping("/api/admin/workspaces")
-  public ResponseEntity<ApiResponse<List<WorkspaceResponse>>> getAllWorkspaces(
-      @RequestParam(required = false) String search) {
+  public ResponseEntity<ApiResponse<PageResponse<WorkspaceResponse>>> getAllWorkspaces(
+      @RequestParam(required = false) String search,
+      @RequestParam(defaultValue = "10") Integer limit,
+      @RequestParam(defaultValue = "1") Integer page) {
     return ResponseEntity.ok(
-        ApiResponse.success(200, "OK", workspaceService.getAllWorkspaces(search)));
+        ApiResponse.success(200, "OK", PageResponse.fromList(workspaceService.getAllWorkspaces(search), limit, page)));
   }
 
   @Tag(name = "Admin – Workspaces")
@@ -132,12 +135,14 @@ public class WorkspaceController {
   @Tag(name = "Workspace – Branches")
   @Operation(summary = "Danh sách chi nhánh của workspace tổng")
   @GetMapping("/api/workspaces/{workspaceId}/branches")
-  public ResponseEntity<ApiResponse<List<WorkspaceResponse>>> getBranches(
+  public ResponseEntity<ApiResponse<PageResponse<WorkspaceResponse>>> getBranches(
       @PathVariable Long workspaceId,
-      @RequestParam(required = false) String search) {
+      @RequestParam(required = false) String search,
+      @RequestParam(defaultValue = "10") Integer limit,
+      @RequestParam(defaultValue = "1") Integer page) {
 
     return ResponseEntity.ok(
-        ApiResponse.success(200, "OK", workspaceService.getBranches(workspaceId, search)));
+        ApiResponse.success(200, "OK", PageResponse.fromList(workspaceService.getBranches(workspaceId, search), limit, page)));
   }
 
   @Tag(name = "Workspace – Branches")
@@ -166,26 +171,31 @@ public class WorkspaceController {
   @Tag(name = "Workspace – Members")
   @Operation(summary = "Danh sách user chưa là member của workspace (dùng cho add-member dialog)")
   @GetMapping("/api/workspaces/{workspaceId}/available-users")
-  public ResponseEntity<ApiResponse<List<UserResponse>>> getAvailableUsers(
+  public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> getAvailableUsers(
       @PathVariable Long workspaceId,
       @RequestParam(required = false) String search,
+      @RequestParam(defaultValue = "20") Integer limit,
+      @RequestParam(defaultValue = "1") Integer page,
       @AuthenticationPrincipal UserDetails userDetails) {
 
     memberService.getMembers(workspaceId, userDetails.getUsername()); // phân quyền: throws 403 nếu không có quyền
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        userService.getAvailableUsersForWorkspace(workspaceId, search)));
+        userService.getAvailableUsersForWorkspace(workspaceId, search, limit, page)));
   }
 
   @Tag(name = "Workspace – Members")
   @Operation(summary = "Tất cả thành viên của workspace tổng + chi nhánh, group theo user")
   @GetMapping("/api/workspaces/{workspaceId}/all-members")
-  public ResponseEntity<ApiResponse<List<MemberGroupResponse>>> getAllMembersGrouped(
+  public ResponseEntity<ApiResponse<PageResponse<MemberGroupResponse>>> getAllMembersGrouped(
       @PathVariable Long workspaceId,
       @RequestParam(required = false) Long branchId,
+      @RequestParam(defaultValue = "20") Integer limit,
+      @RequestParam(defaultValue = "1") Integer page,
       @AuthenticationPrincipal UserDetails userDetails) {
 
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        memberService.getAllMembersGrouped(workspaceId, userDetails.getUsername(), branchId)));
+        PageResponse.fromList(memberService.getAllMembersGrouped(workspaceId, userDetails.getUsername(), branchId),
+            limit, page)));
   }
 
   @Tag(name = "Workspace – Members")
@@ -205,13 +215,15 @@ public class WorkspaceController {
   @Tag(name = "Workspace – Members")
   @Operation(summary = "Danh sách thành viên của workspace/chi nhánh")
   @GetMapping("/api/workspaces/{workspaceId}/members")
-  public ResponseEntity<ApiResponse<List<MemberResponse>>> getMembers(
+  public ResponseEntity<ApiResponse<PageResponse<MemberResponse>>> getMembers(
       @PathVariable Long workspaceId,
       @AuthenticationPrincipal UserDetails userDetails,
-      @RequestParam(required = false) String search) {
+      @RequestParam(required = false) String search,
+      @RequestParam(defaultValue = "10") Integer limit,
+      @RequestParam(defaultValue = "1") Integer page) {
 
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        memberService.getMembers(workspaceId, userDetails.getUsername(), search)));
+        PageResponse.fromList(memberService.getMembers(workspaceId, userDetails.getUsername(), search), limit, page)));
   }
 
   @Tag(name = "Workspace – Members")

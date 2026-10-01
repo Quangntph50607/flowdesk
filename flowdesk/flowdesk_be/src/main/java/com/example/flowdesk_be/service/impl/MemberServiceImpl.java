@@ -13,7 +13,9 @@ import com.example.flowdesk_be.repository.UserRepository;
 import com.example.flowdesk_be.repository.WorkspaceMemberRepository;
 import com.example.flowdesk_be.repository.WorkspaceRepository;
 import com.example.flowdesk_be.service.MemberService;
+import com.example.flowdesk_be.service.StorageService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,10 @@ public class MemberServiceImpl implements MemberService {
   private final WorkspaceRepository workspaceRepository;
   private final UserRepository userRepository;
   private final RoleRepository roleRepository;
+  private final StorageService storageService;
+
+  @Value("${app.storage.b2.bucket-name}")
+  private String bucketName;
 
   @Override
   @Transactional
@@ -109,8 +115,28 @@ public class MemberServiceImpl implements MemberService {
     return memberRepository.findAllByWorkspaceIdIn(allWorkspaceIds)
         .stream()
         .filter(member -> branchId == null || member.getIsActive())
-        .map(MemberResponse::from)
+        .map(member -> resolveAvatar(MemberResponse.from(member)))
         .toList();
+  }
+
+  private MemberResponse resolveAvatar(MemberResponse response) {
+    String avatarUrl = response.getAvatarUrl();
+    if (avatarUrl == null || !avatarUrl.contains("backblazeb2.com")) {
+      return response;
+    }
+
+    try {
+      String path = java.net.URI.create(avatarUrl).getPath();
+      String normalized = path.startsWith("/") ? path.substring(1) : path;
+      String bucketPrefix = bucketName + "/";
+      String fileKey = normalized.startsWith(bucketPrefix)
+          ? normalized.substring(bucketPrefix.length())
+          : normalized;
+      response.setAvatarUrl(storageService.generatePresignedUrl(fileKey));
+    } catch (Exception ignored) {
+      // Keep the stored URL if presigning temporarily fails.
+    }
+    return response;
   }
 
   @Override

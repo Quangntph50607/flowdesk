@@ -33,19 +33,40 @@
           <DataTable
             :value="users"
             :loading="loading"
+            lazy
             paginator
             :rows="10"
+            :total-records="totalUsers"
+            :first="tableFirst"
             striped-rows
             data-key="id"
             class="min-w-[1000px]"
+            @page="onPage"
           >
-            <Column field="fullName" header="Họ tên" sortable />
-            <Column field="email" header="Email" sortable />
-            <Column field="phone" header="SĐT" style="width: 140px">
+            <Column field="fullName" header="Họ tên" sortable>
               <template #body="{ data }">
-                {{ data.phone || "—" }}
+                <div class="flex items-center gap-2">
+                  <img
+                    v-if="data.avatarUrl"
+                    :src="data.avatarUrl"
+                    :alt="data.fullName"
+                    class="w-8 h-8 rounded-full object-cover"
+                  />
+                  <span
+                    v-else
+                    class="w-8 h-8 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold"
+                  >
+                    {{ data.fullName?.charAt(0).toUpperCase() || "?" }}
+                  </span>
+
+                  <div>
+                    <p>{{ data.fullName || "—" }}</p>
+                    <p>{{ data.phone || "" }}</p>
+                  </div>
+                </div>
               </template>
             </Column>
+            <Column field="email" header="Email" sortable />
             <Column field="dateOfBirth" header="Ngày sinh" style="width: 130px">
               <template #body="{ data }">
                 {{ formatDate(data.dateOfBirth) }}
@@ -121,6 +142,9 @@ onMounted(() => {
 });
 
 const users = ref<any[]>([]);
+const totalUsers = ref(0);
+const currentPage = ref(1);
+const tableFirst = computed(() => (currentPage.value - 1) * 10);
 const loading = ref(false);
 const search = ref("");
 const showCreate = ref(false);
@@ -132,9 +156,14 @@ async function fetchUsers() {
   loading.value = true;
   try {
     const res = await api.get("/api/admin/users", {
-      params: { search: search.value.trim() || undefined },
+      params: {
+        search: search.value.trim() || undefined,
+        limit: 10,
+        page: currentPage.value,
+      },
     });
-    users.value = res.data.data ?? [];
+    users.value = getPageItems(res.data.data);
+    totalUsers.value = getPageTotal(res.data.data);
   } catch {
     toast.add({
       severity: "error",
@@ -149,8 +178,16 @@ async function fetchUsers() {
 
 watch(search, () => {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(fetchUsers, 1000);
+  searchTimer = setTimeout(() => {
+    currentPage.value = 1;
+    fetchUsers();
+  }, 1000);
 });
+
+function onPage(event: { page: number }) {
+  currentPage.value = event.page + 1;
+  fetchUsers();
+}
 
 function openEdit(user: any) {
   editingUser.value = user;

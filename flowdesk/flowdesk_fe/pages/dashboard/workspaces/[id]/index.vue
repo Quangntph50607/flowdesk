@@ -608,8 +608,10 @@ async function fetchWorkspace() {
 async function fetchBranches() {
   loadingBranches.value = true;
   try {
-    const res = await api.get(`/api/workspaces/${workspaceId.value}/branches`);
-    branches.value = res.data.data ?? [];
+    const res = await api.get(`/api/workspaces/${workspaceId.value}/branches`, {
+      params: { limit: 10, page: 1 },
+    });
+    branches.value = getPageItems(res.data.data);
   } catch {
     toast.add({
       severity: "error",
@@ -628,8 +630,9 @@ async function fetchAllMembers() {
   try {
     const res = await api.get(
       `/api/workspaces/${workspaceId.value}/all-members`,
+      { params: { limit: 10, page: 1 } },
     );
-    allMembers.value = res.data.data ?? [];
+    allMembers.value = getPageItems(res.data.data);
   } catch {
     toast.add({
       severity: "error",

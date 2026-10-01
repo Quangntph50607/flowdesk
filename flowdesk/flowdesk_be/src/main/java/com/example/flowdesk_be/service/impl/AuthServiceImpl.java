@@ -11,6 +11,7 @@ import com.example.flowdesk_be.repository.RefreshTokenRepository;
 import com.example.flowdesk_be.repository.UserRepository;
 import com.example.flowdesk_be.security.JwtUtil;
 import com.example.flowdesk_be.service.AuthService;
+import com.example.flowdesk_be.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -34,9 +35,13 @@ public class AuthServiceImpl implements AuthService {
   private final PasswordEncoder passwordEncoder;
   private final JwtUtil jwtUtil;
   private final AuthenticationManager authenticationManager;
+  private final StorageService storageService;
 
   @Value("${app.jwt.refresh-expiration-days}")
   private long refreshExpirationDays;
+
+  @Value("${app.storage.b2.bucket-name}")
+  private String bucketName;
 
   @Override
   @Transactional
@@ -159,12 +164,35 @@ public class AuthServiceImpl implements AuthService {
         user.getId(),
         user.getEmail(),
         user.getFullName(),
-        user.getAvatarUrl(),
+        resolveAvatarUrl(user.getAvatarUrl()),
         user.getPhone(),
         user.getAddress(),
         user.getDateOfBirth(),
         user.getSystemRole(),
         workspaces);
+  }
+
+  private String resolveAvatarUrl(String avatarUrl) {
+    if (avatarUrl == null || !avatarUrl.contains("backblazeb2.com")) {
+      return avatarUrl;
+    }
+
+    try {
+      java.net.URI uri = java.net.URI.create(avatarUrl);
+      String path = uri.getPath();
+      String fileKey = extractFileKey(path);
+      return fileKey == null ? avatarUrl : storageService.generatePresignedUrl(fileKey);
+    } catch (Exception ignored) {
+      return avatarUrl;
+    }
+  }
+
+  private String extractFileKey(String path) {
+    String normalized = path.startsWith("/") ? path.substring(1) : path;
+    String bucketPrefix = bucketName + "/";
+    return normalized.startsWith(bucketPrefix)
+        ? normalized.substring(bucketPrefix.length())
+        : normalized;
   }
 
   private String blankToNull(String value) {

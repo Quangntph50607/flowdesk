@@ -23,11 +23,13 @@ public class ChatController {
   private final ChatService chatService;
 
   @GetMapping("/rooms")
-  public ResponseEntity<ApiResponse<List<RoomResponse>>> getMyRooms(
+  public ResponseEntity<ApiResponse<PageResponse<RoomResponse>>> getMyRooms(
       @PathVariable Long workspaceId,
-      @AuthenticationPrincipal UserDetails ud) {
+      @AuthenticationPrincipal UserDetails ud,
+      @RequestParam(defaultValue = "20") Integer limit,
+      @RequestParam(defaultValue = "1") Integer page) {
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        chatService.getMyRooms(workspaceId, ud.getUsername())));
+        PageResponse.fromList(chatService.getMyRooms(workspaceId, ud.getUsername()), limit, page)));
   }
 
   @PostMapping("/rooms/direct")

@@ -2,6 +2,7 @@ package com.example.flowdesk_be.controller;
 
 import com.example.flowdesk_be.dto.request.UpdateUserRequest;
 import com.example.flowdesk_be.dto.response.ApiResponse;
+import com.example.flowdesk_be.dto.response.PageResponse;
 import com.example.flowdesk_be.dto.response.UserResponse;
 import com.example.flowdesk_be.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -51,9 +52,11 @@ public class UserController {
   @Tag(name = "Admin – Users")
   @Operation(summary = "Danh sách tất cả user")
   @GetMapping("/api/admin/users")
-  public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers(
-      @RequestParam(required = false) String search) {
-    return ResponseEntity.ok(ApiResponse.success(200, "OK", userService.getAllUsers(search)));
+  public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> getAllUsers(
+      @RequestParam(required = false) String search,
+      @RequestParam(defaultValue = "10") Integer limit,
+      @RequestParam(defaultValue = "1") Integer page) {
+    return ResponseEntity.ok(ApiResponse.success(200, "OK", userService.getAllUsers(search, limit, page)));
   }
 
   @Tag(name = "Admin – Users")

@@ -136,6 +136,8 @@
             </div>
           </template>
         </Menu>
+
+        <UserProfileDialog v-model:visible="showProfileDialog" />
       </div>
     </aside>
 
@@ -156,6 +158,7 @@ const authStore = useAuthStore();
 const chatStore = useChatStore();
 const route = useRoute();
 const userMenu = ref();
+const showProfileDialog = ref(false);
 
 const navItems = computed(() => {
   const items: { to: string; label: string; icon: string; badge?: number }[] = [
@@ -199,6 +202,13 @@ const userInitial = computed(
 
 const userMenuItems = computed(() => [
   {
+    label: "Thông tin cá nhân",
+    icon: "pi pi-user",
+    command: () => {
+      showProfileDialog.value = true;
+    },
+  },
+  {
     label: "Đăng xuất",
     icon: "pi pi-sign-out",
     command: () => authStore.logout(),
@@ -216,8 +226,6 @@ function isActive(to: string) {
 }
 
 onMounted(async () => {
-  if (!authStore.currentUser) {
-    await authStore.fetchMe();
-  }
+  await authStore.fetchMe();
 });
 </script>

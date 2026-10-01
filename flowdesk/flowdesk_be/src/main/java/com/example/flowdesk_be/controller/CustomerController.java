@@ -6,6 +6,7 @@ import com.example.flowdesk_be.dto.response.ApiResponse;
 import com.example.flowdesk_be.dto.response.CustomerActivityResponse;
 import com.example.flowdesk_be.dto.response.CustomerResponse;
 import com.example.flowdesk_be.dto.response.CustomerTagResponse;
+import com.example.flowdesk_be.dto.response.PageResponse;
 import com.example.flowdesk_be.service.CustomerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,29 +29,37 @@ public class CustomerController {
 
   @Operation(summary = "Danh sách khách hàng tổng hợp theo quyền user")
   @GetMapping("/api/customers")
-  public ResponseEntity<ApiResponse<List<CustomerResponse>>> getAccessibleCustomers(
+  public ResponseEntity<ApiResponse<PageResponse<CustomerResponse>>> getAccessibleCustomers(
       @AuthenticationPrincipal UserDetails userDetails,
       @RequestParam(required = false) Long workspaceId,
       @RequestParam(required = false) Long branchId,
       @RequestParam(required = false) String search,
       @RequestParam(required = false) String status,
-      @RequestParam(required = false) Long tagId) {
+      @RequestParam(required = false) Long tagId,
+      @RequestParam(defaultValue = "10") Integer limit,
+      @RequestParam(defaultValue = "1") Integer page) {
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        customerService.getAccessibleCustomers(userDetails.getUsername(), workspaceId, branchId, search, status,
-            tagId)));
+        PageResponse.fromList(
+            customerService.getAccessibleCustomers(userDetails.getUsername(), workspaceId, branchId, search, status,
+                tagId),
+            limit, page)));
   }
 
   @Operation(summary = "Danh sách khách hàng theo quyền workspace/chi nhánh")
   @GetMapping("/api/workspaces/{workspaceId}/customers")
-  public ResponseEntity<ApiResponse<List<CustomerResponse>>> getCustomers(
+  public ResponseEntity<ApiResponse<PageResponse<CustomerResponse>>> getCustomers(
       @PathVariable Long workspaceId,
       @AuthenticationPrincipal UserDetails userDetails,
       @RequestParam(required = false) String search,
       @RequestParam(required = false) Long branchId,
       @RequestParam(required = false) String status,
-      @RequestParam(required = false) Long tagId) {
+      @RequestParam(required = false) Long tagId,
+      @RequestParam(defaultValue = "10") Integer limit,
+      @RequestParam(defaultValue = "1") Integer page) {
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        customerService.getCustomers(workspaceId, userDetails.getUsername(), search, branchId, status, tagId)));
+        PageResponse.fromList(
+            customerService.getCustomers(workspaceId, userDetails.getUsername(), search, branchId, status, tagId), limit,
+            page)));
   }
 
   @Operation(summary = "Chi tiết khách hàng")
@@ -86,11 +95,13 @@ public class CustomerController {
 
   @Operation(summary = "Danh sách tag khách hàng")
   @GetMapping("/api/workspaces/{workspaceId}/customer-tags")
-  public ResponseEntity<ApiResponse<List<CustomerTagResponse>>> getTags(
+  public ResponseEntity<ApiResponse<PageResponse<CustomerTagResponse>>> getTags(
       @PathVariable Long workspaceId,
-      @AuthenticationPrincipal UserDetails userDetails) {
+      @AuthenticationPrincipal UserDetails userDetails,
+      @RequestParam(defaultValue = "20") Integer limit,
+      @RequestParam(defaultValue = "1") Integer page) {
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        customerService.getTags(workspaceId, userDetails.getUsername())));
+        PageResponse.fromList(customerService.getTags(workspaceId, userDetails.getUsername()), limit, page)));
   }
 
   @Operation(summary = "Tạo tag khách hàng")
@@ -126,11 +137,14 @@ public class CustomerController {
 
   @Operation(summary = "Lịch sử khách hàng")
   @GetMapping("/api/workspaces/{workspaceId}/customers/{customerId}/activities")
-  public ResponseEntity<ApiResponse<List<CustomerActivityResponse>>> getActivities(
+  public ResponseEntity<ApiResponse<PageResponse<CustomerActivityResponse>>> getActivities(
       @PathVariable Long workspaceId,
       @PathVariable Long customerId,
-      @AuthenticationPrincipal UserDetails userDetails) {
+      @AuthenticationPrincipal UserDetails userDetails,
+      @RequestParam(defaultValue = "10") Integer limit,
+      @RequestParam(defaultValue = "1") Integer page) {
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        customerService.getActivities(workspaceId, customerId, userDetails.getUsername())));
+        PageResponse.fromList(customerService.getActivities(workspaceId, customerId, userDetails.getUsername()), limit,
+            page)));
   }
 }

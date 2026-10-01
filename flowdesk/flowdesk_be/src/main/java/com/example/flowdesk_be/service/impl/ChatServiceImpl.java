@@ -12,6 +12,7 @@ import com.example.flowdesk_be.service.ChatService;
 import com.example.flowdesk_be.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +37,9 @@ public class ChatServiceImpl implements ChatService {
   private final WorkspaceMemberRepository workspaceMemberRepo;
   private final WorkspaceRepository workspaceRepo;
   private final StorageService storageService;
+
+  @Value("${app.storage.b2.bucket-name}")
+  private String bucketName;
 
   // ── Helpers ──────────────────────────────────────────────────────
 
@@ -434,7 +438,11 @@ public class ChatServiceImpl implements ChatService {
     assertActiveMember(roomId, me.getId());
     List<GroupMemberResponse> members = memberRepo.findByRoomIdAndIsActiveTrue(roomId)
         .stream()
-        .map(GroupMemberResponse::from)
+        .map(member -> {
+          GroupMemberResponse response = GroupMemberResponse.from(member);
+          response.setAvatarUrl(resolveSharedFileUrl(response.getAvatarUrl()));
+          return response;
+        })
         .toList();
 
     List<Map<String, Object>> media = new ArrayList<>();
@@ -487,8 +495,7 @@ public class ChatServiceImpl implements ChatService {
   }
 
   private String resolveSharedFileUrl(String rawUrl) {
-    if (rawUrl == null || !rawUrl.contains("backblazeb2.com") || rawUrl.contains("X-Amz-Signature")
-        || rawUrl.contains("x-amz-signature")) {
+    if (rawUrl == null || !rawUrl.contains("backblazeb2.com")) {
       return rawUrl;
     }
     String fileKey = extractB2FileKey(rawUrl);
@@ -509,8 +516,11 @@ public class ChatServiceImpl implements ChatService {
       if (path == null || path.isBlank()) {
         return null;
       }
-      String[] parts = path.startsWith("/") ? path.substring(1).split("/", 2) : path.split("/", 2);
-      return parts.length == 2 ? parts[1] : null;
+      String normalized = path.startsWith("/") ? path.substring(1) : path;
+      String bucketPrefix = bucketName + "/";
+      return normalized.startsWith(bucketPrefix)
+          ? normalized.substring(bucketPrefix.length())
+          : normalized;
     } catch (Exception ignored) {
       return null;
     }

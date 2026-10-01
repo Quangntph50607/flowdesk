@@ -65,10 +65,37 @@ export const useAuthStore = defineStore("auth", {
       };
     },
 
+    async resolveAvatarUrl() {
+      const avatarUrl = this.user?.avatarUrl;
+      if (!avatarUrl || !avatarUrl.includes("backblazeb2.com")) {
+        return;
+      }
+
+      try {
+        const pathParts = new URL(avatarUrl).pathname
+          .split("/")
+          .filter(Boolean);
+        const fileKey =
+          pathParts[0] === "flowdesk-files"
+            ? pathParts.slice(1).join("/")
+            : pathParts.join("/");
+        if (!fileKey) return;
+
+        const api = useApi();
+        const res = await api.get("/api/upload/presign", {
+          params: { key: fileKey },
+        });
+        if (this.user) this.user.avatarUrl = res.data.data;
+      } catch {
+        // Keep the stored URL if presigning temporarily fails.
+      }
+    },
+
     async login(email: string, password: string) {
       const api = useApi();
       const res = await api.post("/api/auth/login", { email, password });
       this.setSession(res.data.data);
+      await this.resolveAvatarUrl();
     },
 
     async register(payload: {
@@ -90,6 +117,7 @@ export const useAuthStore = defineStore("auth", {
         const api = useApi();
         const res = await api.get("/api/me");
         this.user = res.data.data;
+        await this.resolveAvatarUrl();
         return true;
       } catch {
         this.user = null;
@@ -109,6 +137,7 @@ export const useAuthStore = defineStore("auth", {
           refreshToken: refreshToken.value,
         });
         this.setSession(res.data.data);
+        await this.resolveAvatarUrl();
         return true;
       } catch {
         clearAuthCookies();

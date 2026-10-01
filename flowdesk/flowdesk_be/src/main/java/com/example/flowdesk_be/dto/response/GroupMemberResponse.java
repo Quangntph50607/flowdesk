@@ -3,8 +3,10 @@ package com.example.flowdesk_be.dto.response;
 import com.example.flowdesk_be.entity.ChatRoomMember;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 
 @Getter
+@Setter
 @Builder
 public class GroupMemberResponse {
 

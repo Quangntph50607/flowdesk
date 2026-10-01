@@ -118,9 +118,9 @@ async function fetchWorkspaces() {
     if (authStore.isSuperAdmin) {
       // SUPER_ADMIN: lấy toàn bộ workspace qua admin API
       const res = await api.get("/api/admin/workspaces", {
-        params: { search: search.value.trim() || undefined },
+        params: { search: search.value.trim() || undefined, limit: 10, page: 1 },
       });
-      workspaces.value = res.data.data ?? [];
+      workspaces.value = getPageItems(res.data.data);
     } else {
       // OWNER/ADMIN/AGENT: lấy workspace của mình từ /api/me
       // đảm bảo user đã được load

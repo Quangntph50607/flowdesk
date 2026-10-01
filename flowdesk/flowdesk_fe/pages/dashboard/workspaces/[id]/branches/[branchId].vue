@@ -238,10 +238,10 @@ async function fetchAvailableMembers(search = "") {
   loadingAvailable.value = true;
   try {
     const res = await api.get(`/api/workspaces/${workspaceId.value}/members`, {
-      params: { search: search.trim() || undefined },
+      params: { search: search.trim() || undefined, limit: 20, page: 1 },
     });
     const currentMemberIds = new Set(members.value.map((m: any) => m.userId));
-    availableMembers.value = (res.data.data ?? [])
+    availableMembers.value = getPageItems(res.data.data)
       .filter((m: any) => !currentMemberIds.has(m.userId))
       .map((m: any) => ({
         userId: m.userId,
@@ -332,8 +332,10 @@ async function fetchBranch() {
 async function fetchMembers() {
   loadingMembers.value = true;
   try {
-    const res = await api.get(`/api/workspaces/${branchId.value}/members`);
-    members.value = res.data.data ?? [];
+    const res = await api.get(`/api/workspaces/${branchId.value}/members`, {
+      params: { limit: 10, page: 1 },
+    });
+    members.value = getPageItems(res.data.data);
   } catch {
     toast.add({
       severity: "error",

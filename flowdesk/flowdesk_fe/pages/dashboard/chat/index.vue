@@ -283,8 +283,10 @@ async function resolveWorkspace() {
   if (authStore.isSuperAdmin) {
     // SUPERADMIN: lấy từ API
     try {
-      const res = await api.get("/api/admin/workspaces");
-      availableWorkspaces.value = (res.data.data ?? []).map((w: any) => ({
+      const res = await api.get("/api/admin/workspaces", {
+        params: { limit: 20, page: 1 },
+      });
+      availableWorkspaces.value = getPageItems(res.data.data).map((w: any) => ({
         workspaceId: w.id,
         workspaceName: w.name,
         roleCode: "SUPER_ADMIN",
@@ -383,8 +385,10 @@ function wsId(): number {
 // ── Data loading ──────────────────────────────────────────────────
 async function loadRooms() {
   try {
-    const res = await api.get(`/api/workspaces/${wsId()}/chat/rooms`);
-    chatStore.setRooms(res.data.data ?? []);
+    const res = await api.get(`/api/workspaces/${wsId()}/chat/rooms`, {
+      params: { limit: 20, page: 1 },
+    });
+    chatStore.setRooms(getPageItems(res.data.data));
   } catch {
     toast.add({
       severity: "error",
@@ -397,8 +401,10 @@ async function loadRooms() {
 
 async function loadWorkspaceMembers() {
   try {
-    const res = await api.get(`/api/workspaces/${wsId()}/all-members`);
-    workspaceMembers.value = (res.data.data ?? []).map((m: any) => ({
+    const res = await api.get(`/api/workspaces/${wsId()}/all-members`, {
+      params: { limit: 20, page: 1 },
+    });
+    workspaceMembers.value = getPageItems(res.data.data).map((m: any) => ({
       userId: m.userId,
       fullName: m.fullName,
       email: m.email,
