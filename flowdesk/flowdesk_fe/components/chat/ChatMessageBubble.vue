@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div :data-chat-message-id="message.id">
     <!-- System message -->
     <div
       v-if="message.type === 'SYSTEM'"
@@ -44,7 +44,10 @@
       <!-- Bubble group -->
       <div
         class="flex flex-col max-w-[360px]"
-        :class="isMine ? 'items-end' : 'items-start'"
+        :class="[
+          isMine ? 'items-end' : 'items-start',
+          highlighted ? 'chat-message-jump-highlight' : '',
+        ]"
       >
         <!-- Sender name — chỉ ở bubble đầu group, không phải tin của mình -->
         <span
@@ -66,7 +69,6 @@
           >
             <button
               class="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-              v-tooltip.top="'Trả lời'"
               @click="$emit('reply', message)"
             >
               <i class="pi pi-reply text-[11px]" />
@@ -74,7 +76,6 @@
             <button
               v-if="isMine && message.type === 'TEXT'"
               class="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
-              v-tooltip.top="'Sửa'"
               @click="$emit('edit', message)"
             >
               <i class="pi pi-pencil text-[11px]" />
@@ -82,169 +83,179 @@
             <button
               v-if="isMine"
               class="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-              v-tooltip.top="'Thu hồi'"
               @click="$emit('recall', message)"
             >
               <i class="pi pi-undo text-[11px]" />
             </button>
           </div>
 
-        <!-- Recalled -->
-        <div
-          v-if="message.isRecalled"
-          class="px-3.5 py-2"
-          :class="bubbleShapeClass"
-        >
-          <p class="text-sm italic opacity-50">Tin nhắn đã được thu hồi</p>
-        </div>
-
-        <!-- IMAGE -->
-        <div v-else-if="message.type === 'IMAGE'">
+          <!-- Recalled -->
           <div
-            v-if="resolvedUrl === null"
-            class="w-[200px] h-[150px] bg-slate-200 animate-pulse"
-            :class="imgBorderClass"
-          />
-          <img
-            v-else-if="!imgError"
-            :src="resolvedUrl"
-            :alt="message.fileName ?? 'ảnh'"
-            class="block cursor-pointer object-cover"
-            :class="imgBorderClass"
-            style="max-width: 260px; max-height: 300px; min-width: 80px"
-            @click="lightboxUrl = resolvedUrl"
-            @error="imgError = true"
-          />
-          <div
-            v-if="imgError"
-            class="flex items-center gap-2 px-3 py-2 text-slate-500 text-xs bg-slate-100"
-            :class="imgBorderClass"
+            v-if="message.isRecalled"
+            class="px-3.5 py-2 border border-slate-400 text-slate-500 text-sm italic min-w-0"
+            :class="bubbleShapeClass"
           >
-            <i class="pi pi-image text-base" />
-            <span>Không tải được ảnh</span>
+            <p class="text-sm italic opacity-50">Tin nhắn đã được thu hồi</p>
           </div>
-        </div>
 
-        <!-- FILE -->
-        <a
-          v-else-if="message.type === 'FILE'"
-          :href="resolvedUrl ?? message.content ?? '#'"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="flex items-center gap-3 px-3.5 py-2.5 no-underline min-w-[200px] transition-opacity hover:opacity-80"
-          :class="[
-            bubbleShapeClass,
-            isMine
-              ? 'bg-slate-900 text-white'
-              : 'bg-white text-slate-900 border border-slate-200 shadow-sm',
-          ]"
-        >
-          <div
-            class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-            :class="isMine ? 'bg-white/10' : 'bg-slate-100'"
-          >
-            <i
-              class="pi pi-file text-[16px]"
-              :class="isMine ? 'text-white' : 'text-slate-600'"
+          <!-- IMAGE -->
+          <div v-else-if="message.type === 'IMAGE'">
+            <div
+              v-if="resolvedUrl === null"
+              class="w-[200px] h-[150px] bg-slate-200 animate-pulse"
+              :class="imgBorderClass"
             />
-          </div>
-          <div class="min-w-0">
-            <p class="text-sm font-medium truncate max-w-[180px]">
-              {{ message.fileName ?? "Tải xuống" }}
-            </p>
-            <p class="text-xs opacity-60">
-              {{ formatFileSize(message.fileSize) }}
-            </p>
-          </div>
-          <i class="pi pi-download text-[13px] shrink-0 opacity-70" />
-        </a>
-
-        <!-- VIDEO -->
-        <div
-          class="overflow-hidden"
-          :class="imgBorderClass"
-          style="max-width: 260px"
-          v-else-if="message.type === 'VIDEO'"
-        >
-          <video
-            v-if="resolvedUrl"
-            :src="resolvedUrl"
-            controls
-            class="block max-w-full"
-            style="max-height: 260px"
-          />
-          <div v-else class="w-[200px] h-[120px] bg-slate-200 animate-pulse" />
-        </div>
-
-        <!-- AUDIO -->
-        <div
-          v-else-if="message.type === 'AUDIO'"
-          class="px-3 py-2"
-          :class="[
-            bubbleShapeClass,
-            isMine
-              ? 'bg-slate-900'
-              : 'bg-white border border-slate-200 shadow-sm',
-          ]"
-        >
-          <audio
-            v-if="resolvedUrl"
-            :src="resolvedUrl"
-            controls
-            class="max-w-[240px]"
-          />
-          <div v-else class="w-[200px] h-8 bg-white/20 animate-pulse rounded" />
-        </div>
-
-        <!-- TEXT -->
-        <div
-          v-else
-          class="px-3.5 py-2 leading-relaxed break-words min-w-0"
-          :class="[
-            bubbleShapeClass,
-            isMine
-              ? 'bg-slate-900 text-white'
-              : 'bg-white text-slate-900 border border-slate-200 shadow-sm',
-          ]"
-        >
-          <div
-            v-if="message.replyTo"
-            class="mb-1.5 flex items-center gap-2 overflow-hidden rounded-[10px] border-l-[3px] px-2 py-1.5 text-xs"
-            :class="
-              isMine
-                ? 'border-blue-400 bg-white/10 text-white/80'
-                : 'border-blue-500 bg-slate-100 text-slate-500'
-            "
-          >
             <img
-              v-if="replyPreviewImageUrl"
-              :src="replyPreviewImageUrl"
-              alt="Ảnh được trả lời"
-              class="h-9 w-10 shrink-0 rounded object-cover bg-white"
+              v-else-if="!imgError"
+              :src="resolvedUrl"
+              :alt="message.fileName ?? 'ảnh'"
+              class="block cursor-pointer object-cover"
+              :class="imgBorderClass"
+              style="max-width: 260px; max-height: 300px; min-width: 80px"
+              @click="lightboxUrl = resolvedUrl"
+              @error="imgError = true"
             />
             <div
-              v-else-if="message.replyTo.type !== 'TEXT'"
-              class="h-9 w-10 shrink-0 rounded bg-white flex items-center justify-center text-slate-500"
+              v-if="imgError"
+              class="flex items-center gap-2 px-3 py-2 text-slate-500 text-xs bg-slate-100"
+              :class="imgBorderClass"
             >
-              <i :class="replyPreviewIcon" />
-            </div>
-            <div class="min-w-0">
-              <p
-                class="truncate font-semibold"
-                :class="isMine ? 'text-white' : 'text-slate-700'"
-              >
-                {{ message.replyTo.senderName }}
-              </p>
-              <p
-                class="mt-0.5 truncate"
-                :class="isMine ? 'text-white/70' : 'text-slate-500'"
-              >
-                {{ replyPreviewText }}
-              </p>
+              <i class="pi pi-image text-base" />
+              <span>Không tải được ảnh</span>
             </div>
           </div>
-          <p class="text-sm">{{ message.content }}</p>
-        </div>
+
+          <!-- FILE -->
+          <a
+            v-else-if="message.type === 'FILE'"
+            :href="resolvedUrl ?? message.content ?? '#'"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex items-center gap-3 px-3.5 py-2.5 no-underline min-w-[200px] transition-opacity hover:opacity-80"
+            :class="[
+              bubbleShapeClass,
+              isMine
+                ? 'bg-slate-900 text-white'
+                : 'bg-white text-slate-900 border border-slate-200 shadow-sm',
+            ]"
+          >
+            <div
+              class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+              :class="isMine ? 'bg-white/10' : 'bg-slate-100'"
+            >
+              <i
+                class="pi pi-file text-[16px]"
+                :class="isMine ? 'text-white' : 'text-slate-600'"
+              />
+            </div>
+            <div class="min-w-0">
+              <p class="text-sm font-medium truncate max-w-[180px]">
+                {{ message.fileName ?? "Tải xuống" }}
+              </p>
+              <p class="text-xs opacity-60">
+                {{ formatFileSize(message.fileSize) }}
+              </p>
+            </div>
+            <i class="pi pi-download text-[13px] shrink-0 opacity-70" />
+          </a>
+
+          <!-- VIDEO -->
+          <div
+            class="overflow-hidden"
+            :class="imgBorderClass"
+            style="max-width: 260px"
+            v-else-if="message.type === 'VIDEO'"
+          >
+            <video
+              v-if="resolvedUrl"
+              :src="resolvedUrl"
+              controls
+              class="block max-w-full"
+              style="max-height: 260px"
+            />
+            <div
+              v-else
+              class="w-[200px] h-[120px] bg-slate-200 animate-pulse"
+            />
+          </div>
+
+          <!-- AUDIO -->
+          <div
+            v-else-if="message.type === 'AUDIO'"
+            class="px-3 py-2"
+            :class="[
+              bubbleShapeClass,
+              isMine
+                ? 'bg-slate-900'
+                : 'bg-white border border-slate-200 shadow-sm',
+            ]"
+          >
+            <audio
+              v-if="resolvedUrl"
+              :src="resolvedUrl"
+              controls
+              class="max-w-[240px]"
+            />
+            <div
+              v-else
+              class="w-[200px] h-8 bg-white/20 animate-pulse rounded"
+            />
+          </div>
+
+          <!-- TEXT -->
+          <div
+            v-else
+            class="px-3.5 py-2 leading-relaxed break-words min-w-0"
+            :class="[
+              bubbleShapeClass,
+              isMine
+                ? 'bg-slate-900 text-white'
+                : 'bg-white text-slate-900 border border-slate-200 shadow-sm',
+            ]"
+          >
+            <div
+              v-if="message.replyTo"
+              role="button"
+              tabindex="0"
+              class="mb-1.5 flex cursor-pointer items-center gap-2 overflow-hidden rounded-[10px] border-l-[3px] px-2 py-1.5 text-xs transition-colors"
+              :class="
+                isMine
+                  ? 'border-blue-400 bg-white/10 text-white/80 hover:bg-white/15'
+                  : 'border-blue-500 bg-slate-100 text-slate-500 hover:bg-slate-200'
+              "
+              @click="emit('jumpToMessage', message.replyTo.id)"
+              @keydown.enter.prevent="emit('jumpToMessage', message.replyTo.id)"
+              @keydown.space.prevent="emit('jumpToMessage', message.replyTo.id)"
+            >
+              <img
+                v-if="replyPreviewImageUrl"
+                :src="replyPreviewImageUrl"
+                alt="Ảnh được trả lời"
+                class="h-9 w-10 shrink-0 rounded object-cover bg-white"
+              />
+              <div
+                v-else-if="message.replyTo.type !== 'TEXT'"
+                class="h-9 w-10 shrink-0 rounded bg-white flex items-center justify-center text-slate-500"
+              >
+                <i :class="replyPreviewIcon" />
+              </div>
+              <div class="min-w-0">
+                <p
+                  class="truncate font-semibold"
+                  :class="isMine ? 'text-white' : 'text-slate-700'"
+                >
+                  {{ message.replyTo.senderName }}
+                </p>
+                <p
+                  class="mt-0.5 truncate"
+                  :class="isMine ? 'text-white/70' : 'text-slate-500'"
+                >
+                  {{ replyPreviewText }}
+                </p>
+              </div>
+            </div>
+            <p class="text-sm">{{ message.content }}</p>
+          </div>
         </div>
 
         <!-- Timestamp — chỉ hiện ở bubble cuối group -->
@@ -259,7 +270,6 @@
             · đã chỉnh sửa
           </span>
         </div>
-
       </div>
     </div>
 
@@ -296,12 +306,14 @@ const props = defineProps<{
   showSenderName?: boolean;
   isFirstInGroup?: boolean;
   isLastInGroup?: boolean;
+  highlighted?: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "reply", message: ChatMessage): void;
   (e: "edit", message: ChatMessage): void;
   (e: "recall", message: ChatMessage): void;
+  (e: "jumpToMessage", messageId: number): void;
 }>();
 
 const config = useRuntimeConfig();
@@ -455,3 +467,24 @@ function formatFileSize(bytes?: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 </script>
+
+<style scoped>
+.chat-message-jump-highlight {
+  animation: chat-message-jump-highlight 1.4s ease;
+  border-radius: 18px;
+}
+
+@keyframes chat-message-jump-highlight {
+  0%,
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  18%,
+  70% {
+    background: rgba(59, 130, 246, 0.1);
+    box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.35);
+  }
+}
+</style>

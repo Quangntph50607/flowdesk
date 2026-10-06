@@ -100,9 +100,11 @@
           :show-sender-name="room.type === 'GROUP'"
           :is-first-in-group="item.isFirst"
           :is-last-in-group="item.isLast"
+          :highlighted="highlightedMessageId === item.msg.id"
           @reply="startReply"
           @edit="startEdit"
           @recall="$emit('recallMessage', $event.id)"
+          @jump-to-message="jumpToMessage"
         />
       </template>
 
@@ -326,6 +328,7 @@ const emit = defineEmits<{
 const inputText = ref("");
 const replyTarget = ref<ChatMessage | null>(null);
 const editingMessage = ref<ChatMessage | null>(null);
+const highlightedMessageId = ref<number | null>(null);
 const messagesContainerRef = ref<HTMLElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const toast = useAppToast();
@@ -526,6 +529,31 @@ function clearPendingFile() {
 function onScroll(e: Event) {
   const el = e.target as HTMLElement;
   if (el.scrollTop < 60 && !props.loadingMore) emit("loadMore");
+}
+
+function jumpToMessage(messageId: number) {
+  const container = messagesContainerRef.value;
+  if (!container) return;
+
+  const target = container.querySelector<HTMLElement>(
+    `[data-chat-message-id="${messageId}"]`,
+  );
+
+  if (!target) {
+    toast.add({
+      severity: "info",
+      summary: "Chưa tải tin nhắn gốc",
+      detail: "Kéo lên để tải thêm rồi bấm lại vào phần trả lời.",
+      life: 2500,
+    });
+    return;
+  }
+
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  highlightedMessageId.value = messageId;
+  window.setTimeout(() => {
+    if (highlightedMessageId.value === messageId) highlightedMessageId.value = null;
+  }, 1500);
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
