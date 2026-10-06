@@ -31,6 +31,9 @@ export const useAuthStore = defineStore("auth", {
     currentUser: (state) => state.user,
     isSuperAdmin: (state) => state.user?.systemRole === "SUPER_ADMIN",
     isAdmin: (state) => state.user?.systemRole === "SUPER_ADMIN",
+    hasWorkspaceAccess: (state) =>
+      (state.user?.workspaces?.length ?? 0) > 0,
+    primaryWorkspaceRole: (state) => state.user?.workspaces?.[0]?.roleCode,
     // Danh sách workspace tổng (level 0) mà user là OWNER/ADMIN
     myWorkspaces: (state): WorkspaceInfo[] =>
       state.user?.workspaces?.filter((w) => w.parentId === null) ?? [],

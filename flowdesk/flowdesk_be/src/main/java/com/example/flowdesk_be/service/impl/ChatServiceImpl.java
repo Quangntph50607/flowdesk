@@ -267,7 +267,7 @@ public class ChatServiceImpl implements ChatService {
 
     Pageable pageable = PageRequest.of(page, size);
     Page<ChatMessage> msgPage = messageRepo.findByRoomIdWithSender(roomId, pageable);
-    return msgPage.map(MessageResponse::from);
+    return msgPage.map(msg -> MessageResponse.from(msg, resolveSharedFileUrl(msg.getSender().getAvatarUrl())));
   }
 
   @Override
@@ -295,7 +295,7 @@ public class ChatServiceImpl implements ChatService {
     room.setUpdatedAt(LocalDateTime.now());
     roomRepo.save(room);
 
-    return MessageResponse.from(msg);
+    return MessageResponse.from(msg, resolveSharedFileUrl(me.getAvatarUrl()));
   }
 
   private String normalizeMessageType(String type) {
@@ -476,7 +476,7 @@ public class ChatServiceImpl implements ChatService {
   }
 
   private Map<String, Object> buildSharedFilePayload(ChatMessage message) {
-    MessageResponse response = MessageResponse.from(message);
+    MessageResponse response = MessageResponse.from(message, resolveSharedFileUrl(message.getSender().getAvatarUrl()));
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("id", response.getId());
     payload.put("roomId", response.getRoomId());

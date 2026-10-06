@@ -158,7 +158,7 @@
               <p class="text-sm font-semibold mt-0.5" style="color: #0f172a">
                 {{
                   authStore.currentUser?.systemRole ??
-                  authStore.myWorkspaces[0]?.roleCode ??
+                  authStore.primaryWorkspaceRole ??
                   "—"
                 }}
               </p>

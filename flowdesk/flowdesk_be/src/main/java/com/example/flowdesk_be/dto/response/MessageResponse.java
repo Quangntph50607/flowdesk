@@ -25,6 +25,10 @@ public class MessageResponse {
   private LocalDateTime createdAt;
 
   public static MessageResponse from(ChatMessage msg) {
+    return from(msg, msg.getSender().getAvatarUrl());
+  }
+
+  public static MessageResponse from(ChatMessage msg, String senderAvatarUrl) {
     return MessageResponse.builder()
         .id(msg.getId())
         .roomId(msg.getRoom().getId())
@@ -34,7 +38,7 @@ public class MessageResponse {
             msg.getSender().getFullName() != null
                 ? String.valueOf(msg.getSender().getFullName().charAt(0)).toUpperCase()
                 : "?")
-        .senderAvatarUrl(msg.getSender().getAvatarUrl())
+        .senderAvatarUrl(senderAvatarUrl)
         .type(msg.getType())
         .content(msg.getIsRecalled() ? null : msg.getContent())
         .isRecalled(msg.getIsRecalled())

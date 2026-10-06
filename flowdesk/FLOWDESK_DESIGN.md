@@ -1,580 +1,402 @@
-# FlowDesk – Tài liệu Thiết kế Nghiệp vụ, ERD & Database
+# FlowDesk - Tài liệu thiết kế hiện tại
+
+Tài liệu này mô tả trạng thái đang được implement trong repo hiện tại. Khi có điểm khác với tài liệu cũ, ưu tiên theo code hiện tại.
 
 ---
 
 ## 1. FlowDesk là gì?
 
-FlowDesk là nền tảng quản lý và chăm sóc khách hàng (CRM + Live Chat) dành cho doanh nghiệp nhỏ và vừa, hoạt động theo mô hình **multi-tenant SaaS**.
+FlowDesk là nền tảng quản lý workspace, thành viên, khách hàng và chat nội bộ cho doanh nghiệp nhỏ/vừa. Hệ thống chạy theo mô hình nhiều workspace, trong đó dữ liệu nghiệp vụ được tách theo workspace tổng và chi nhánh.
 
-Mỗi doanh nghiệp sử dụng FlowDesk sẽ có **một Workspace riêng** — dữ liệu giữa các workspace hoàn toàn cách ly nhau.
+MVP hiện tại tập trung vào:
 
-### Mục tiêu MVP
-
-```
-Đăng nhập
-     ↓
-Vào workspace của doanh nghiệp
-     ↓
-Quản lý khách hàng
-     ↓
-Tạo hội thoại & nhắn tin realtime
-     ↓
-Gắn Tag / Tạo Task
-     ↓
-Theo dõi lịch sử chăm sóc
+```text
+Đăng ký / đăng nhập
+  -> setup hoặc chọn workspace
+  -> quản lý workspace, chi nhánh, thành viên
+  -> quản lý khách hàng, tag, lịch sử chăm sóc
+  -> chat trực tiếp / chat nhóm realtime
+  -> upload avatar / file chat qua storage ngoài
 ```
 
-### Sau MVP
-
-- Tích hợp kênh ngoài (Facebook, Zalo, Email)
-- WebSocket realtime hoàn chỉnh
-- AI suggestion
-- Redis / Kafka / Automation
-- Billing & Subscription
+Các phần như task, notification, audit log, billing, automation, AI suggestion chưa phải implementation hiện tại trong repo.
 
 ---
 
-## 2. Mô hình Workspace — Tổng & Chi nhánh
+## 2. Mô hình workspace
 
-### 2.1 Hai tầng, không hơn
+### 2.1 Hai tầng workspace
 
-```
-Workspace Tổng (level = 0)  ←  đại diện cho doanh nghiệp
-     ├── Chi nhánh A (level = 1)
-     ├── Chi nhánh B (level = 1)
-     └── Chi nhánh C (level = 1)
-```
-
-- Chỉ có **2 tầng**: workspace tổng và chi nhánh. Không có tầng thứ 3.
-- Chi nhánh **luôn thuộc về** một workspace tổng duy nhất (`parent_id`).
-- Nếu doanh nghiệp không tạo chi nhánh, **workspace tổng chính là nơi làm việc** — hoạt động bình thường, không cần chi nhánh.
-
-### 2.2 Hai kịch bản sử dụng
-
-**Kịch bản 1 — Không có chi nhánh (doanh nghiệp nhỏ)**
-
-```
-Workspace: Spa ABC
-  → Tất cả members làm việc trực tiếp tại workspace tổng
-  → Customer, Conversation, Task đều thuộc workspace tổng
+```text
+Workspace tổng (level = 0)
+  ├── Chi nhánh A (level = 1)
+  ├── Chi nhánh B (level = 1)
+  └── Chi nhánh C (level = 1)
 ```
 
-**Kịch bản 2 — Có chi nhánh**
+- `workspaces.parent_id = NULL` và `level = 0`: workspace tổng.
+- `workspaces.parent_id != NULL` và `level = 1`: chi nhánh.
+- Constraint DB chỉ cho phép `level IN (0, 1)`.
+- Chi nhánh luôn thuộc một workspace tổng.
+- Workspace tổng vẫn có thể hoạt động nếu chưa có chi nhánh, nhưng module Customers hiện tại yêu cầu customer gắn với một `branch_id`.
 
-```
-Workspace tổng: Spa ABC (level=0)
-  ├── Chi nhánh: Spa ABC – Quận 1 (level=1)
-  └── Chi nhánh: Spa ABC – Quận 3 (level=1)
+### 2.2 Phân quyền workspace
 
-Agent A → phân bổ vào "Quận 1" → chỉ thấy data của Quận 1
-Agent B → phân bổ vào "Quận 3" → chỉ thấy data của Quận 3
-Agent C → phân bổ vào cả "Quận 1" và "Quận 3" → thấy data của cả 2
-Owner/Admin → thấy tất cả data của mọi chi nhánh, có cột "Chi nhánh" để biết data thuộc về đâu
-```
+Hệ thống có hai lớp quyền:
 
-### 2.3 Data thuộc về chi nhánh nào?
+| Lớp quyền | Nơi lưu | Ghi chú |
+| --- | --- | --- |
+| Platform Admin | `users.system_role = 'SUPER_ADMIN'` | Tài khoản vận hành nội bộ FlowDesk |
+| Workspace Role | `workspace_members.role_id` | Quyền của user trong workspace/chi nhánh |
 
-- Customer, Conversation, Task, Tag đều có `workspace_id`.
-- Khi Agent Quận 1 thêm khách hàng, `workspace_id` = ID của chi nhánh Quận 1.
-- Owner xem workspace tổng → **query tất cả** customers có `workspace_id` thuộc bất kỳ chi nhánh con nào (hoặc bản thân workspace tổng nếu không có chi nhánh).
-- **Không "copy" data** giữa các tầng — query theo cây workspace.
+Workspace roles hiện có:
+
+| Role | Code | Nơi gán theo thiết kế hiện tại |
+| --- | --- | --- |
+| Owner | `OWNER` | Workspace tổng |
+| Admin | `ADMIN` | Workspace tổng |
+| Agent | `AGENT` | Chi nhánh, hoặc workspace user được gán trực tiếp |
+
+Các rule chính đang có trong service:
+
+- `SUPER_ADMIN` quản lý `/api/admin/**`.
+- Khi tạo workspace tổng, hệ thống tự tạo membership `OWNER` cho owner.
+- Owner/Admin của workspace tổng được tạo, sửa, xóa chi nhánh và quản lý members.
+- User là member active của chi nhánh có thể truy cập data trong chi nhánh đó.
+- Customer scope:
+  - `SUPER_ADMIN`: xem được tất cả customer, có filter theo `workspaceId`, `branchId`, `status`, `tagId`, `search`.
+  - `OWNER`/`ADMIN` ở workspace tổng: xem toàn bộ customer của workspace tổng theo các chi nhánh con.
+  - User chỉ thuộc chi nhánh: chỉ xem customer của các chi nhánh mình là member active.
 
 ---
 
-## 3. Hệ thống Phân quyền
+## 3. Backend hiện tại
 
-### 3.1 Hai tầng quyền
+Backend dùng Spring Boot, Spring Security JWT, JPA/Hibernate, SQL Server và WebSocket STOMP.
 
-| Tầng               | Mô tả                                           | Lưu ở đâu                           |
-| ------------------ | ----------------------------------------------- | ----------------------------------- |
-| **Platform Admin** | Người vận hành hệ thống FlowDesk (internal)     | `users.system_role = 'SUPER_ADMIN'` |
-| **Workspace Role** | Quyền của user trong workspace/chi nhánh cụ thể | `workspace_members.role_id`         |
+Các package chính:
 
-> `SUPER_ADMIN` là tài khoản nội bộ của team FlowDesk, không phải doanh nghiệp dùng sản phẩm.
+```text
+flowdesk_be/src/main/java/com/example/flowdesk_be
+  config/
+  controller/
+  dto/request/
+  dto/response/
+  entity/
+  exception/
+  repository/
+  security/
+  service/
+  service/impl/
+```
 
-### 3.2 Workspace Roles
+Security hiện tại:
 
-| Role      | Code    | Gán vào tầng nào                                               | Mô tả                                                                    |
-| --------- | ------- | -------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| **Owner** | `OWNER` | Workspace tổng (level=0)                                       | Người tạo workspace. Toàn quyền trên cả workspace tổng lẫn mọi chi nhánh |
-| **Admin** | `ADMIN` | Workspace tổng (level=0)                                       | Quản trị viên được Owner bổ nhiệm. Quản lý members, chi nhánh            |
-| **Agent** | `AGENT` | Chi nhánh (level=1) hoặc workspace tổng nếu không có chi nhánh | Nhân viên chăm sóc khách hàng                                            |
-
-### 3.3 Quy tắc phân quyền
-
-**OWNER và ADMIN** (gán ở workspace tổng):
-
-- Xem/quản lý toàn bộ data của workspace tổng + mọi chi nhánh
-- Tạo/xóa/sửa chi nhánh
-- Thêm/xóa thành viên ở bất kỳ tầng nào
-- ADMIN không thể thêm ADMIN khác (chỉ OWNER mới thêm được ADMIN)
-
-**AGENT** (gán ở chi nhánh):
-
-- Chỉ thấy data của chi nhánh mình được phân bổ
-- Một Agent **có thể thuộc nhiều chi nhánh** — thấy data của tất cả chi nhánh đó
-- Không quản lý members, không thấy data chi nhánh khác
-
-**Khi không có chi nhánh:**
-
-- Agent được gán trực tiếp vào workspace tổng (level=0) với role `AGENT`
-- Hoạt động y hệt như có chi nhánh, chỉ khác là `workspace_id` trỏ vào tổng
-
-### 3.4 Ma trận quyền
-
-| Hành động                 | SUPER_ADMIN | OWNER | ADMIN | AGENT |
-| ------------------------- | :---------: | :---: | :---: | :---: |
-| Quản lý toàn platform     |     ✅      |  ❌   |  ❌   |  ❌   |
-| Xóa workspace             |     ❌      |  ✅   |  ❌   |  ❌   |
-| Sửa tên workspace         |     ❌      |  ✅   |  ✅   |  ❌   |
-| Tạo/xóa chi nhánh         |     ❌      |  ✅   |  ✅   |  ❌   |
-| Thêm ADMIN                |     ❌      |  ✅   |  ❌   |  ❌   |
-| Thêm AGENT vào chi nhánh  |     ❌      |  ✅   |  ✅   |  ❌   |
-| Xem data tất cả chi nhánh |     ❌      |  ✅   |  ✅   |  ❌   |
-| Xem data chi nhánh mình   |     ❌      |  ✅   |  ✅   |  ✅   |
-| Thêm/sửa/xóa Customer     |     ❌      |  ✅   |  ✅   |  ✅   |
-| Tạo/xử lý Conversation    |     ❌      |  ✅   |  ✅   |  ✅   |
-| Gửi Message               |     ❌      |  ✅   |  ✅   |  ✅   |
-| Tạo/hoàn thành Task       |     ❌      |  ✅   |  ✅   |  ✅   |
-| Quản lý Tags              |     ❌      |  ✅   |  ✅   |  ❌   |
+- `/api/auth/**`: public.
+- `/ws/**`: public ở filter chain để handshake WebSocket.
+- `/swagger-ui/**`, `/v3/api-docs/**`: public.
+- `/api/admin/**`: yêu cầu role `SUPER_ADMIN`.
+- `/api/me/**`, `/api/workspaces/**`, `/api/upload/**`: authenticated.
+- JWT access token mặc định sống 24 giờ.
+- Refresh token sống mặc định 7 ngày.
 
 ---
 
-## 4. ERD Tổng thể
+## 4. Database hiện tại
 
-```
-USERS
-  │
-  ├──[owns]──► WORKSPACES ◄──[parent]── WORKSPACES (self-ref, chi nhánh)
-  │                 │
-  │           WORKSPACE_MEMBERS ◄──[role]── ROLES
-  │                 │
-  │        (workspace_id = tổng hoặc chi nhánh)
-  │                 │
-  │                 ├──► CUSTOMERS ──────────────────────────────────┐
-  │                 │         │                                       │
-  │                 │         └──► CONVERSATIONS ──► MESSAGES        │
-  │                 │                   │                             │
-  │                 │                   └──► CONVERSATION_MEMBERS    │
-  │                 │                                                 │
-  │                 │         └──► CUSTOMER_TAGS ◄── TAGS            │
-  │                 │                                                 │
-  │                 └──► TASKS ◄───────────────────────────────────┘
-  │                 │
-  │                 ├──► NOTIFICATIONS
-  │                 └──► AUDIT_LOGS
-  │
-  └──[receives]──► NOTIFICATIONS
-  └──[assigned]──► CONVERSATIONS, TASKS
+`database/schema.sql` đang tạo database SQL Server với các bảng nền tảng và CRM. `spring.jpa.hibernate.ddl-auto=none`, nên DB sạch cần có migration/schema đầy đủ trước khi chạy app.
+
+### 4.1 Thứ tự bảng trong `schema.sql`
+
+```text
+1. users
+2. refresh_tokens
+3. roles
+4. workspaces
+5. workspace_members
+6. customers
+7. customer_tags
+8. customer_tag_assignments
+9. customer_activities
 ```
 
----
+Ngoài ra code hiện có entity chat:
 
-## 5. Database SQL Server
-
-### Thứ tự tạo bảng
-
-```
-1.  users
-2.  roles
-3.  workspaces          ← self-referential (parent_id)
-4.  workspace_members
-5.  customers
-6.  conversations
-7.  conversation_members
-8.  messages
-9.  tags
-10. customer_tags
-11. tasks
-12. notifications
-13. audit_logs
+```text
+chat_rooms
+chat_room_members
+chat_messages
 ```
 
----
+`database/migration_chat_details.sql` chỉ bổ sung cột cho `chat_rooms` và `chat_room_members` nếu các bảng này đã tồn tại. Nếu dựng DB mới từ đầu, cần đảm bảo migration tạo 3 bảng chat base cũng được chạy/có sẵn.
 
-### 5.1 `users`
+### 4.2 `users`
 
 ```sql
 CREATE TABLE users (
-  id            BIGINT        IDENTITY(1,1) PRIMARY KEY,
-  email         NVARCHAR(255) NOT NULL UNIQUE,
-  password_hash NVARCHAR(255) NOT NULL,
-  full_name     NVARCHAR(150) NOT NULL,
-  avatar_url    NVARCHAR(500) NULL,
-  system_role   NVARCHAR(50)  NULL,         -- NULL | 'SUPER_ADMIN'
-  is_active     BIT           NOT NULL DEFAULT 1,
-  created_at    DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
-  updated_at    DATETIME2     NOT NULL DEFAULT SYSDATETIME()
+    id               BIGINT        IDENTITY(1,1) PRIMARY KEY,
+    email            NVARCHAR(255) NOT NULL,
+    password_hash    NVARCHAR(255) NOT NULL,
+    full_name        NVARCHAR(150) NOT NULL,
+    avatar_url       NVARCHAR(500) NULL,
+    phone            NVARCHAR(40)  NULL,
+    phone_normalized NVARCHAR(20)  NULL,
+    address          NVARCHAR(500) NULL,
+    date_of_birth    DATE          NULL,
+    system_role      NVARCHAR(50)  NULL,
+    is_active        BIT           NOT NULL DEFAULT 1,
+    created_at       DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+    updated_at       DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+
+    CONSTRAINT UQ_users_email UNIQUE (email),
+    CONSTRAINT CHK_users_system_role CHECK (system_role IN ('SUPER_ADMIN') OR system_role IS NULL)
 );
 ```
 
----
+Index bổ sung:
 
-### 5.2 `roles`
+```sql
+CREATE UNIQUE INDEX UX_users_phone_normalized
+ON users(phone_normalized)
+WHERE phone_normalized IS NOT NULL;
+```
+
+### 4.3 `refresh_tokens`
+
+```sql
+CREATE TABLE refresh_tokens (
+    id         BIGINT        IDENTITY(1,1) PRIMARY KEY,
+    user_id    BIGINT        NOT NULL,
+    token      NVARCHAR(500) NOT NULL UNIQUE,
+    expires_at DATETIME2     NOT NULL,
+    is_revoked BIT           NOT NULL DEFAULT 0,
+    created_at DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+
+    CONSTRAINT FK_refresh_tokens_user FOREIGN KEY (user_id) REFERENCES users(id)
+);
+```
+
+### 4.4 `roles`
 
 ```sql
 CREATE TABLE roles (
-  id         BIGINT        IDENTITY(1,1) PRIMARY KEY,
-  code       NVARCHAR(50)  NOT NULL UNIQUE,  -- 'OWNER' | 'ADMIN' | 'AGENT'
-  name       NVARCHAR(100) NOT NULL,
-  created_at DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
-  updated_at DATETIME2     NOT NULL DEFAULT SYSDATETIME()
-);
+    id         BIGINT        IDENTITY(1,1) PRIMARY KEY,
+    code       NVARCHAR(50)  NOT NULL UNIQUE,
+    name       NVARCHAR(100) NOT NULL,
+    created_at DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+    updated_at DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
 
--- Seed data (chạy một lần khi setup)
-INSERT INTO roles (code, name) VALUES
-  ('OWNER', 'Chủ workspace'),
-  ('ADMIN', 'Quản trị viên'),
-  ('AGENT', 'Nhân viên');
+    CONSTRAINT CHK_roles_code CHECK (code IN ('OWNER', 'ADMIN', 'AGENT'))
+);
 ```
 
----
+Seed hiện tại:
 
-### 5.3 `workspaces`
+```sql
+INSERT INTO roles (code, name) VALUES
+    ('OWNER', N'Chủ workspace'),
+    ('ADMIN', N'Quản trị viên'),
+    ('AGENT', N'Nhân viên');
+```
+
+### 4.5 `workspaces`
 
 ```sql
 CREATE TABLE workspaces (
-  id         BIGINT        IDENTITY(1,1) PRIMARY KEY,
-  name       NVARCHAR(150) NOT NULL,
-  slug       NVARCHAR(150) NOT NULL UNIQUE,
-  owner_id   BIGINT        NOT NULL,
-  parent_id  BIGINT        NULL,    -- NULL = workspace tổng, non-null = chi nhánh
-  level      TINYINT       NOT NULL DEFAULT 0,  -- 0 = tổng, 1 = chi nhánh
-  is_active  BIT           NOT NULL DEFAULT 1,
-  created_at DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
-  updated_at DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+    id         BIGINT        IDENTITY(1,1) PRIMARY KEY,
+    name       NVARCHAR(150) NOT NULL,
+    slug       NVARCHAR(150) NOT NULL UNIQUE,
+    owner_id   BIGINT        NOT NULL,
+    parent_id  BIGINT        NULL,
+    level      TINYINT       NOT NULL DEFAULT 0,
+    is_active  BIT           NOT NULL DEFAULT 1,
+    created_at DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+    updated_at DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
 
-  CONSTRAINT FK_workspaces_owner  FOREIGN KEY (owner_id)  REFERENCES users(id),
-  CONSTRAINT FK_workspaces_parent FOREIGN KEY (parent_id) REFERENCES workspaces(id),
-  CONSTRAINT CHK_workspace_level  CHECK (level IN (0, 1))  -- chỉ 2 tầng
+    CONSTRAINT FK_workspaces_owner FOREIGN KEY (owner_id) REFERENCES users(id),
+    CONSTRAINT FK_workspaces_parent FOREIGN KEY (parent_id) REFERENCES workspaces(id),
+    CONSTRAINT CHK_workspaces_level CHECK (level IN (0, 1))
 );
 ```
 
-**Ghi chú:**
-
-- `level = 0`: workspace tổng — `parent_id` luôn NULL
-- `level = 1`: chi nhánh — `parent_id` trỏ vào workspace tổng
-- Constraint `CHK_workspace_level` enforce cứng không có tầng thứ 3
-
----
-
-### 5.4 `workspace_members`
+### 4.6 `workspace_members`
 
 ```sql
 CREATE TABLE workspace_members (
-  id           BIGINT    IDENTITY(1,1) PRIMARY KEY,
-  workspace_id BIGINT    NOT NULL,
-  user_id      BIGINT    NOT NULL,
-  role_id      BIGINT    NOT NULL,
-  is_active    BIT       NOT NULL DEFAULT 1,
-  joined_at    DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
-  created_at   DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
-  updated_at   DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    id           BIGINT    IDENTITY(1,1) PRIMARY KEY,
+    workspace_id BIGINT    NOT NULL,
+    user_id      BIGINT    NOT NULL,
+    role_id      BIGINT    NOT NULL,
+    is_active    BIT       NOT NULL DEFAULT 1,
+    joined_at    DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    created_at   DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    updated_at   DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
 
-  CONSTRAINT FK_wm_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
-  CONSTRAINT FK_wm_user      FOREIGN KEY (user_id)      REFERENCES users(id),
-  CONSTRAINT FK_wm_role      FOREIGN KEY (role_id)      REFERENCES roles(id),
-  CONSTRAINT UQ_workspace_user UNIQUE (workspace_id, user_id)
+    CONSTRAINT FK_wm_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
+    CONSTRAINT FK_wm_user FOREIGN KEY (user_id) REFERENCES users(id),
+    CONSTRAINT FK_wm_role FOREIGN KEY (role_id) REFERENCES roles(id),
+    CONSTRAINT UQ_workspace_user UNIQUE (workspace_id, user_id)
 );
 ```
 
-**Quy tắc gán role (enforce ở application layer):**
+### 4.7 CRM customers
 
-| Role    | Gán vào workspace level                                                 |
-| ------- | ----------------------------------------------------------------------- |
-| `OWNER` | level = 0 (workspace tổng)                                              |
-| `ADMIN` | level = 0 (workspace tổng)                                              |
-| `AGENT` | level = 1 (chi nhánh) — hoặc level = 0 nếu workspace không có chi nhánh |
+Code hiện tại không dùng bảng `tags` và bảng nối `customer_tags` như tài liệu cũ. Thay vào đó:
 
-**Ví dụ dữ liệu:**
-
-```
-workspace_members:
-  workspace_id=1 (Spa ABC tổng),   user_id=10, role=OWNER   ← Owner
-  workspace_id=1 (Spa ABC tổng),   user_id=11, role=ADMIN   ← Admin
-  workspace_id=2 (Spa ABC Quận 1), user_id=12, role=AGENT   ← Agent Quận 1
-  workspace_id=3 (Spa ABC Quận 3), user_id=12, role=AGENT   ← Agent 12 cũng ở Quận 3
-  workspace_id=2 (Spa ABC Quận 1), user_id=13, role=AGENT   ← Agent chỉ Quận 1
-```
-
-> User 12 thuộc cả 2 chi nhánh → thấy data của cả 2.
-
----
-
-### 5.5 `customers`
+- `customer_tags`: danh mục tag theo workspace tổng.
+- `customer_tag_assignments`: bảng gán tag cho customer.
+- `customer_activities`: lịch sử thao tác trên customer.
 
 ```sql
 CREATE TABLE customers (
-  id           BIGINT        IDENTITY(1,1) PRIMARY KEY,
-  workspace_id BIGINT        NOT NULL,    -- trỏ vào chi nhánh (hoặc tổng nếu k có chi nhánh)
-  full_name    NVARCHAR(150) NOT NULL,
-  phone        NVARCHAR(20)  NULL,
-  email        NVARCHAR(255) NULL,
-  avatar_url   NVARCHAR(500) NULL,
-  source       NVARCHAR(50)  NULL,   -- 'WALK_IN' | 'REFERRAL' | 'FACEBOOK' | 'ZALO' | ...
-  status       NVARCHAR(50)  NOT NULL DEFAULT 'ACTIVE',
-  note         NVARCHAR(MAX) NULL,
-  created_at   DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
-  updated_at   DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+    id               BIGINT         IDENTITY(1,1) PRIMARY KEY,
+    workspace_id     BIGINT         NOT NULL,
+    branch_id        BIGINT         NOT NULL,
+    assigned_user_id BIGINT         NULL,
+    created_by       BIGINT         NOT NULL,
+    name             NVARCHAR(150)  NOT NULL,
+    phone            NVARCHAR(40)   NULL,
+    email            NVARCHAR(255)  NULL,
+    address          NVARCHAR(500)  NULL,
+    source           NVARCHAR(80)   NULL,
+    status           NVARCHAR(50)   NOT NULL DEFAULT 'NEW',
+    note             NVARCHAR(1000) NULL,
+    is_active        BIT            NOT NULL DEFAULT 1,
+    created_at       DATETIME2      NOT NULL DEFAULT SYSDATETIME(),
+    updated_at       DATETIME2      NOT NULL DEFAULT SYSDATETIME(),
 
-  CONSTRAINT FK_customers_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+    CONSTRAINT FK_customers_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
+    CONSTRAINT FK_customers_branch FOREIGN KEY (branch_id) REFERENCES workspaces(id),
+    CONSTRAINT FK_customers_assigned_user FOREIGN KEY (assigned_user_id) REFERENCES users(id),
+    CONSTRAINT FK_customers_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT CHK_customers_status CHECK (status IN ('NEW', 'CONTACTING', 'POTENTIAL', 'QUOTED', 'WON', 'LOST'))
 );
 ```
 
-**Cách query theo tầng:**
+Customer status hợp lệ:
 
-```sql
--- Agent Quận 1 (workspace_id = 2) xem customers của mình:
-SELECT * FROM customers WHERE workspace_id = 2;
-
--- Owner xem tất cả customers của Spa ABC (workspace tổng id=1):
-SELECT c.*, w.name AS branch_name
-FROM customers c
-JOIN workspaces w ON w.id = c.workspace_id
-WHERE w.id = 1                          -- workspace tổng
-   OR w.parent_id = 1                   -- tất cả chi nhánh của tổng
-ORDER BY c.created_at DESC;
+```text
+NEW, CONTACTING, POTENTIAL, QUOTED, WON, LOST
 ```
 
----
-
-### 5.6 `conversations`
-
-```sql
-CREATE TABLE conversations (
-  id               BIGINT        IDENTITY(1,1) PRIMARY KEY,
-  workspace_id     BIGINT        NOT NULL,
-  customer_id      BIGINT        NOT NULL,
-  assigned_user_id BIGINT        NULL,
-  channel          NVARCHAR(50)  NOT NULL DEFAULT 'WEB',
-  status           NVARCHAR(50)  NOT NULL DEFAULT 'OPEN',
-  subject          NVARCHAR(255) NULL,
-  last_message_at  DATETIME2     NULL,
-  created_at       DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
-  updated_at       DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
-
-  CONSTRAINT FK_conv_workspace FOREIGN KEY (workspace_id)     REFERENCES workspaces(id),
-  CONSTRAINT FK_conv_customer  FOREIGN KEY (customer_id)      REFERENCES customers(id),
-  CONSTRAINT FK_conv_agent     FOREIGN KEY (assigned_user_id) REFERENCES users(id)
-);
-```
-
----
-
-### 5.7 `conversation_members`
-
-```sql
-CREATE TABLE conversation_members (
-  id              BIGINT    IDENTITY(1,1) PRIMARY KEY,
-  conversation_id BIGINT    NOT NULL,
-  user_id         BIGINT    NOT NULL,
-  joined_at       DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
-
-  CONSTRAINT FK_cm_conversation FOREIGN KEY (conversation_id) REFERENCES conversations(id),
-  CONSTRAINT FK_cm_user         FOREIGN KEY (user_id)         REFERENCES users(id),
-  CONSTRAINT UQ_conv_user       UNIQUE (conversation_id, user_id)
-);
-```
-
----
-
-### 5.8 `messages`
-
-```sql
-CREATE TABLE messages (
-  id              BIGINT        IDENTITY(1,1) PRIMARY KEY,
-  conversation_id BIGINT        NOT NULL,
-  sender_user_id  BIGINT        NULL,       -- NULL nếu sender_type = CUSTOMER / SYSTEM
-  sender_type     NVARCHAR(20)  NOT NULL,   -- 'USER' | 'CUSTOMER' | 'SYSTEM' | 'AI'
-  content         NVARCHAR(MAX) NOT NULL,
-  message_type    NVARCHAR(20)  NOT NULL DEFAULT 'TEXT',
-  status          NVARCHAR(20)  NOT NULL DEFAULT 'SENT',
-  sent_at         DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
-  edited_at       DATETIME2     NULL,
-
-  CONSTRAINT FK_msg_conversation FOREIGN KEY (conversation_id) REFERENCES conversations(id),
-  CONSTRAINT FK_msg_sender       FOREIGN KEY (sender_user_id)  REFERENCES users(id)
-);
-```
-
----
-
-### 5.9 `tags`
-
-```sql
-CREATE TABLE tags (
-  id           BIGINT        IDENTITY(1,1) PRIMARY KEY,
-  workspace_id BIGINT        NOT NULL,    -- thuộc workspace tổng hoặc chi nhánh
-  name         NVARCHAR(100) NOT NULL,
-  color        NVARCHAR(20)  NULL,
-  created_at   DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
-
-  CONSTRAINT FK_tags_workspace     FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
-  CONSTRAINT UQ_tag_name_workspace UNIQUE (workspace_id, name)
-);
-```
-
----
-
-### 5.10 `customer_tags`
+Tag và activity:
 
 ```sql
 CREATE TABLE customer_tags (
-  customer_id BIGINT NOT NULL,
-  tag_id      BIGINT NOT NULL,
+    id           BIGINT        IDENTITY(1,1) PRIMARY KEY,
+    workspace_id BIGINT        NOT NULL,
+    name         NVARCHAR(80)  NOT NULL,
+    color        NVARCHAR(20)  NOT NULL DEFAULT '#64748b',
+    created_at   DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+    updated_at   DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
 
-  CONSTRAINT PK_customer_tags PRIMARY KEY (customer_id, tag_id),
-  CONSTRAINT FK_ct_customer   FOREIGN KEY (customer_id) REFERENCES customers(id),
-  CONSTRAINT FK_ct_tag        FOREIGN KEY (tag_id)      REFERENCES tags(id)
+    CONSTRAINT FK_customer_tags_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
+    CONSTRAINT UQ_customer_tags_workspace_name UNIQUE (workspace_id, name)
+);
+
+CREATE TABLE customer_tag_assignments (
+    id          BIGINT    IDENTITY(1,1) PRIMARY KEY,
+    customer_id BIGINT    NOT NULL,
+    tag_id      BIGINT    NOT NULL,
+    created_at  DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+
+    CONSTRAINT FK_cta_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT FK_cta_tag FOREIGN KEY (tag_id) REFERENCES customer_tags(id),
+    CONSTRAINT UQ_customer_tag_assignments UNIQUE (customer_id, tag_id)
+);
+
+CREATE TABLE customer_activities (
+    id          BIGINT        IDENTITY(1,1) PRIMARY KEY,
+    customer_id BIGINT        NOT NULL,
+    actor_id    BIGINT        NOT NULL,
+    action      NVARCHAR(50)  NOT NULL,
+    description NVARCHAR(500) NOT NULL,
+    created_at  DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+
+    CONSTRAINT FK_customer_activities_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT FK_customer_activities_actor FOREIGN KEY (actor_id) REFERENCES users(id)
 );
 ```
 
----
+Workspace tổng được tạo sẽ seed các tag mặc định: `VIP`, `Khách mới`, `Cần gọi lại`, `Đã báo giá`, `Đã mua`, `Tiềm năng`, `Khó chốt`, `Ưu tiên cao`.
 
-### 5.11 `tasks`
+### 4.8 Chat entities hiện tại
 
-```sql
-CREATE TABLE tasks (
-  id               BIGINT        IDENTITY(1,1) PRIMARY KEY,
-  workspace_id     BIGINT        NOT NULL,
-  customer_id      BIGINT        NULL,
-  conversation_id  BIGINT        NULL,
-  assigned_user_id BIGINT        NULL,
-  title            NVARCHAR(255) NOT NULL,
-  description      NVARCHAR(MAX) NULL,
-  status           NVARCHAR(20)  NOT NULL DEFAULT 'TODO',
-  priority         NVARCHAR(20)  NOT NULL DEFAULT 'MEDIUM',
-  due_at           DATETIME2     NULL,
-  completed_at     DATETIME2     NULL,
-  created_at       DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
-  updated_at       DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+Code hiện tại dùng chat nội bộ theo phòng, không dùng các bảng `conversations`, `conversation_members`, `messages` như tài liệu cũ.
 
-  CONSTRAINT FK_tasks_workspace    FOREIGN KEY (workspace_id)     REFERENCES workspaces(id),
-  CONSTRAINT FK_tasks_customer     FOREIGN KEY (customer_id)      REFERENCES customers(id),
-  CONSTRAINT FK_tasks_conversation FOREIGN KEY (conversation_id)  REFERENCES conversations(id),
-  CONSTRAINT FK_tasks_assignee     FOREIGN KEY (assigned_user_id) REFERENCES users(id)
-);
+Các entity hiện có:
+
+```text
+chat_rooms
+  id
+  workspace_id
+  type              -- DIRECT | GROUP
+  name
+  avatar_url
+  description
+  created_by
+  is_active
+  created_at
+  updated_at
+
+chat_room_members
+  id
+  room_id
+  user_id
+  is_owner
+  is_active
+  is_muted
+  is_pinned
+  invited_by
+  removed_by
+  joined_at
+  left_at
+  last_read_at
+
+chat_messages
+  id
+  room_id
+  sender_id
+  type              -- TEXT | IMAGE | FILE | VIDEO | AUDIO | SYSTEM
+  content
+  file_name
+  file_size
+  is_recalled
+  is_edited
+  created_at
+  updated_at
 ```
 
----
-
-### 5.12 `notifications`
-
-```sql
-CREATE TABLE notifications (
-  id           BIGINT        IDENTITY(1,1) PRIMARY KEY,
-  workspace_id BIGINT        NOT NULL,
-  user_id      BIGINT        NOT NULL,
-  type         NVARCHAR(50)  NOT NULL,
-  title        NVARCHAR(255) NOT NULL,
-  content      NVARCHAR(MAX) NULL,
-  is_read      BIT           NOT NULL DEFAULT 0,
-  created_at   DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
-  read_at      DATETIME2     NULL,
-
-  CONSTRAINT FK_notif_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
-  CONSTRAINT FK_notif_user      FOREIGN KEY (user_id)      REFERENCES users(id)
-);
-```
-
----
-
-### 5.13 `audit_logs`
-
-```sql
-CREATE TABLE audit_logs (
-  id           BIGINT         IDENTITY(1,1) PRIMARY KEY,
-  workspace_id BIGINT         NULL,
-  user_id      BIGINT         NOT NULL,
-  action       NVARCHAR(100)  NOT NULL,
-  entity_type  NVARCHAR(50)   NOT NULL,
-  entity_id    BIGINT         NULL,
-  details      NVARCHAR(MAX)  NULL,
-  created_at   DATETIME2      NOT NULL DEFAULT SYSDATETIME(),
-
-  CONSTRAINT FK_audit_workspace FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
-  CONSTRAINT FK_audit_user      FOREIGN KEY (user_id)      REFERENCES users(id)
-);
-```
+Khi gọi chat từ chi nhánh, service resolve về workspace tổng để room chat nằm ở scope workspace tổng.
 
 ---
 
-## 6. Indexes
+## 5. API hiện tại
 
-```sql
--- users
-CREATE UNIQUE INDEX IX_users_email ON users(email);
+### 5.1 Auth
 
--- workspaces
-CREATE UNIQUE INDEX IX_workspaces_slug   ON workspaces(slug);
-CREATE INDEX        IX_workspaces_parent ON workspaces(parent_id);  -- query chi nhánh của tổng
-
--- workspace_members
-CREATE INDEX IX_wm_workspace ON workspace_members(workspace_id);
-CREATE INDEX IX_wm_user      ON workspace_members(user_id);         -- user thuộc ws nào
-
--- customers
-CREATE INDEX IX_customers_workspace      ON customers(workspace_id);
-CREATE INDEX IX_customers_ws_phone       ON customers(workspace_id, phone);
-
--- conversations
-CREATE INDEX IX_conv_workspace_status    ON conversations(workspace_id, status);
-CREATE INDEX IX_conv_customer            ON conversations(customer_id);
-CREATE INDEX IX_conv_assigned            ON conversations(assigned_user_id);
-CREATE INDEX IX_conv_last_message        ON conversations(workspace_id, last_message_at DESC);
-
--- messages (quan trọng nhất cho Inbox)
-CREATE INDEX IX_messages_conv_sent       ON messages(conversation_id, sent_at);
-
--- tasks
-CREATE INDEX IX_tasks_ws_user_status     ON tasks(workspace_id, assigned_user_id, status);
-
--- notifications
-CREATE INDEX IX_notif_user_unread        ON notifications(user_id, is_read);
-
--- audit_logs
-CREATE INDEX IX_audit_workspace_time     ON audit_logs(workspace_id, created_at DESC);
+```text
+POST /api/auth/register
+POST /api/auth/login
+POST /api/auth/refresh
+POST /api/auth/logout
+POST /api/auth/logout-all
 ```
 
----
-
-## 7. Kiến trúc API
-
-### 7.1 Nhóm endpoint
-
-```
-/api/auth/**                              → Public
-/api/me                                   → Mọi user đã đăng nhập
-
-/api/admin/**                             → SUPER_ADMIN only
-  /api/admin/users/**
-  /api/admin/workspaces/**
-
-/api/workspace/{workspaceId}/**           → Members của workspace đó
-  /api/workspace/{workspaceId}/branches/**        → OWNER + ADMIN
-  /api/workspace/{workspaceId}/members/**         → OWNER + ADMIN
-  /api/workspace/{workspaceId}/customers/**       → Tất cả members
-  /api/workspace/{workspaceId}/conversations/**   → Tất cả members
-  /api/workspace/{workspaceId}/tasks/**           → Tất cả members
-  /api/workspace/{workspaceId}/tags/**            → OWNER + ADMIN
-```
-
-**Lưu ý authorization thực tế:**
-
-- Khi Agent gọi `/api/workspace/2/customers` (chi nhánh Quận 1), BE kiểm tra user có `workspace_member` active ở workspace 2.
-- Khi OWNER gọi `/api/workspace/1/customers` (workspace tổng), BE tự động include customers của tổng **và** tất cả chi nhánh con.
-
-### 7.2 Auth Response
+Auth response hiện có thêm thông tin profile:
 
 ```json
 {
-  "accessToken": "eyJ...",
-  "refreshToken": "uuid...",
+  "accessToken": "jwt",
+  "refreshToken": "uuid",
   "tokenType": "Bearer",
   "userId": 10,
-  "email": "owner@spaABC.vn",
+  "email": "owner@flowdesk.vn",
   "fullName": "Nguyễn Văn A",
   "avatarUrl": null,
+  "phone": null,
+  "address": null,
+  "dateOfBirth": null,
   "systemRole": null,
   "workspaces": [
     {
@@ -583,231 +405,256 @@ CREATE INDEX IX_audit_workspace_time     ON audit_logs(workspace_id, created_at 
       "workspaceSlug": "spa-abc",
       "parentId": null,
       "roleCode": "OWNER"
-    },
-    {
-      "workspaceId": 2,
-      "workspaceName": "Spa ABC – Quận 1",
-      "workspaceSlug": "spa-abc-quan-1",
-      "parentId": 1,
-      "roleCode": "AGENT"
     }
   ]
 }
 ```
 
-> `parentId = null` → workspace tổng. `parentId = 1` → chi nhánh của workspace 1.
-> FE dùng thông tin này để render đúng sidebar và guard.
+### 5.2 User / admin users
 
----
-
-## 8. Kiến trúc Frontend (Next.js App Router)
-
-### 8.1 Xác định portal theo role
-
-```
-user.systemRole === 'SUPER_ADMIN'
-  → SUPER_ADMIN Portal (/dashboard, /admin/*)
-
-user.workspaces có entry với roleCode='OWNER' hoặc 'ADMIN' và parentId=null
-  → Owner/Admin Portal (/admin-workspace/*)
-
-user.workspaces chỉ có entry với roleCode='AGENT' (parentId != null)
-  → Agent Portal (/agent/*)
+```text
+GET /api/me
+GET /api/admin/users
+GET /api/admin/users/by-email
+GET /api/admin/users/{id}
 ```
 
-### 8.2 Cấu trúc route
+### 5.3 Workspace
 
-```
-(auth)/
-  login/
-  register/
+```text
+POST   /api/admin/workspaces
+GET    /api/admin/workspaces
+GET    /api/admin/workspaces/{id}
+PUT    /api/admin/workspaces/{id}
+DELETE /api/admin/workspaces/{id}
 
-(dashboard)/
-  welcome/               ← Workspace picker (SUPER_ADMIN, OWNER, ADMIN)
-  dashboard/             ← SUPER_ADMIN only — platform overview
+POST   /api/workspaces
+GET    /api/workspaces/{workspaceId}
+POST   /api/workspaces/{workspaceId}/branches
+GET    /api/workspaces/{workspaceId}/branches
+PUT    /api/workspaces/{workspaceId}/branches/{branchId}
+DELETE /api/workspaces/{workspaceId}/branches/{branchId}
 
-  admin/                 ← SUPER_ADMIN only
-    users/
-    workspaces/
-      [id]/              ← Chi tiết workspace + danh sách chi nhánh
-
-  admin-workspace/       ← OWNER + ADMIN
-    page                 ← Dashboard workspace tổng
-    branches/            ← Quản lý chi nhánh
-      [id]/
-    members/             ← Quản lý thành viên
-
-  agent/                 ← AGENT only
-    page                 ← Danh sách chi nhánh được phân bổ
-    branch/[id]/         ← Làm việc trong chi nhánh cụ thể
-
-  profile/               ← Mọi user
+GET    /api/workspaces/{workspaceId}/available-users
+GET    /api/workspaces/{workspaceId}/all-members
+POST   /api/workspaces/{workspaceId}/members
+GET    /api/workspaces/{workspaceId}/members
+DELETE /api/workspaces/{workspaceId}/members/{memberId}
 ```
 
-### 8.3 Sidebar navigation
+### 5.4 Customers / CRM
 
-```
-SUPER_ADMIN:          OWNER/ADMIN:              AGENT:
-  Tổng quan             Dashboard                 Chi nhánh của tôi
-  Người dùng            Chi nhánh
-  Workspace             Thành viên
-```
+```text
+GET  /api/customers
+GET  /api/workspaces/{workspaceId}/customers
+GET  /api/workspaces/{workspaceId}/customers/{customerId}
+POST /api/workspaces/{workspaceId}/customers
+PUT  /api/workspaces/{workspaceId}/customers/{customerId}
 
-### 8.4 Route Guards
+GET    /api/workspaces/{workspaceId}/customer-tags
+POST   /api/workspaces/{workspaceId}/customer-tags
+PUT    /api/workspaces/{workspaceId}/customer-tags/{tagId}
+DELETE /api/workspaces/{workspaceId}/customer-tags/{tagId}
 
-```tsx
-// SUPER_ADMIN only
-<SuperAdminGuard>...</SuperAdminGuard>
-
-// OWNER hoặc ADMIN của workspace tổng
-<WorkspaceOwnerAdminGuard>...</WorkspaceOwnerAdminGuard>
-
-// AGENT — có ít nhất 1 chi nhánh được phân bổ
-<AgentGuard>...</AgentGuard>
+GET /api/workspaces/{workspaceId}/customers/{customerId}/activities
 ```
 
----
+List endpoints đang trả qua `PageResponse.fromList(...)`, tức phân trang ở memory theo `limit` và `page`.
 
-## 9. Logic hiển thị data theo role
+### 5.5 Chat REST
 
-### 9.1 Agent vào chi nhánh
-
-```
-Agent được gán vào chi nhánh Quận 1 (workspace_id = 2)
-→ Vào /agent/branch/2
-→ FE gọi /api/workspace/2/customers
-→ BE: kiểm tra user có member record tại workspace 2 → trả data của workspace 2
-→ Hiển thị: danh sách customers của Quận 1
-```
-
-### 9.2 Owner xem workspace tổng
-
-```
-Owner của Spa ABC (workspace_id = 1)
-→ Vào /admin-workspace
-→ FE gọi /api/workspace/1/customers
-→ BE: user có role OWNER tại workspace 1
-    → query: workspace_id = 1 OR parent_id = 1
-    → kèm thêm field branch_name
-→ Hiển thị: tất cả customers, có cột "Chi nhánh: Quận 1 / Quận 3 / Tổng"
+```text
+GET    /api/workspaces/{workspaceId}/chat/rooms
+POST   /api/workspaces/{workspaceId}/chat/rooms/direct
+POST   /api/workspaces/{workspaceId}/chat/rooms/group
+GET    /api/workspaces/{workspaceId}/chat/rooms/{roomId}/messages
+POST   /api/workspaces/{workspaceId}/chat/rooms/{roomId}/read
+POST   /api/workspaces/{workspaceId}/chat/rooms/{roomId}/members/{targetUserId}
+DELETE /api/workspaces/{workspaceId}/chat/rooms/{roomId}/members/{targetUserId}
+POST   /api/workspaces/{workspaceId}/chat/rooms/{roomId}/leave
+PATCH  /api/workspaces/{workspaceId}/chat/rooms/{roomId}/name
+PATCH  /api/workspaces/{workspaceId}/chat/rooms/{roomId}/avatar
+GET    /api/workspaces/{workspaceId}/chat/rooms/{roomId}/members
+DELETE /api/workspaces/{workspaceId}/chat/rooms/{roomId}
 ```
 
-### 9.3 Workspace không có chi nhánh
+### 5.6 Upload
 
+```text
+POST /api/upload/avatar
+POST /api/upload/chat
+GET  /api/upload/presign
 ```
-Spa XYZ không tạo chi nhánh
-→ Agent được gán vào workspace tổng (workspace_id = 5, level=0) với role AGENT
-→ Hoạt động bình thường, không khác gì có chi nhánh
-→ Không có màn hình "chọn chi nhánh"
-→ Vào thẳng /agent/workspace/5
+
+Storage hiện tại cấu hình qua Backblaze B2/S3-compatible env:
+
+```text
+B2_ENDPOINT
+B2_REGION
+B2_BUCKET_NAME
+B2_KEY_ID
+B2_APPLICATION_KEY
 ```
 
 ---
 
-## 10. Luồng WebSocket (Realtime)
+## 6. Realtime chat
 
-```
-Agent gửi tin nhắn
-      ↓
-POST /api/workspace/{id}/conversations/{convId}/messages
-      ↓
-BE: validate → save messages table → update last_message_at
-      ↓
-Phát WebSocket event → conversation_members của conversation đó
-      ↓
-FE nhận event → update UI ngay, không cần polling
+WebSocket hiện tại dùng STOMP qua endpoint `/ws`.
+
+Flow gửi message:
+
+```text
+FE connect /ws
+  -> subscribe /topic/room/{roomId}
+  -> send JSON tới /app/chat/{roomId}/send
+  -> BE lưu chat_messages
+  -> BE broadcast MessageResponse tới /topic/room/{roomId}
 ```
 
-**REST vs WebSocket:**
-| | REST | WebSocket |
-|---|:---:|:---:|
-| Lịch sử messages | ✅ | ❌ |
-| Gửi message mới | ✅ (persist) | ✅ (broadcast) |
-| Typing indicator | ❌ | ✅ |
-| Read receipt | ❌ | ✅ |
-| New notification | ❌ | ✅ |
+Payload gửi message:
+
+```json
+{
+  "type": "TEXT",
+  "content": "Nội dung tin nhắn",
+  "fileName": null,
+  "fileSize": null
+}
+```
+
+`type` hợp lệ:
+
+```text
+TEXT, IMAGE, FILE, VIDEO, AUDIO, SYSTEM
+```
+
+REST vẫn dùng để:
+
+- Lấy danh sách rooms.
+- Tạo direct room hoặc group room.
+- Lấy lịch sử messages.
+- Mark read.
+- Quản lý member group.
+- Đổi tên, đổi avatar, xóa group.
 
 ---
 
-## 11. Thứ tự code Spring Boot
+## 7. Frontend hiện tại
 
+Frontend hiện tại là Nuxt 3/Vue 3, không phải Next.js App Router.
+
+Stack:
+
+```text
+Nuxt 3
+Vue 3
+Pinia
+PrimeVue
+Tailwind CSS
+STOMP + SockJS client
+Axios
 ```
-Giai đoạn 1 — Foundation
-  1. Auth (register, login, refresh, logout)
-  2. User (profile, /api/me)
 
-Giai đoạn 2 — Workspace & Members
-  3. Workspace (tạo tổng, tạo chi nhánh, CRUD)
-  4. Workspace Members (thêm, phân role, xóa)
+Routes hiện có:
 
-Giai đoạn 3 — Core Business
-  5. Customer (CRUD, filter theo branch/tổng)
-  6. Conversation (tạo, assign, đóng)
-  7. Message (gửi, lịch sử)
+```text
+/
+/login
+/register
+/setup-workspace
 
-Giai đoạn 4 — Productivity
-  8. Tag (tạo, gắn cho customer)
-  9. Task (tạo, assign, hoàn thành)
-
-Giai đoạn 5 — Realtime
-  10. WebSocket (message, typing, online status)
-  11. Notification
-
-Giai đoạn 6 — Platform Admin
-  12. SUPER_ADMIN: quản lý toàn platform
-
-Giai đoạn 7 — Infrastructure (sau MVP)
-  13. Redis cache
-  14. Kafka event streaming
-  15. AI integration
+/dashboard
+/dashboard/users
+/dashboard/workspaces
+/dashboard/workspaces/[id]
+/dashboard/workspaces/[id]/branches/[branchId]
+/dashboard/customers
+/dashboard/chat
 ```
+
+Layouts:
+
+```text
+layouts/auth.vue
+layouts/default.vue
+```
+
+Middleware:
+
+```text
+middleware/auth.ts
+middleware/guest.ts
+```
+
+Stores/composables chính:
+
+```text
+stores/auth.ts
+stores/chat.ts
+
+composables/useApi.ts
+composables/useAuthCookies.ts
+composables/useChat.ts
+composables/useFileUpload.ts
+composables/useAppToast.ts
+composables/useAppConfirm.ts
+```
+
+Ghi chú khác với tài liệu cũ:
+
+- Không có route `/admin-workspace/*` hoặc `/agent/*`.
+- Các màn workspace, customers, chat hiện nằm dưới `/dashboard/*`.
+- Không có route guard React component như `<SuperAdminGuard>`.
+- Guard thực tế dùng Nuxt middleware và logic trong store/API.
 
 ---
 
-## 12. Nguyên tắc thiết kế cốt lõi
+## 8. Nguyên tắc dữ liệu hiện tại
 
-**1. Mọi business data phải có `workspace_id`**
-Đây là trụ cột của tenant isolation. Query luôn bắt đầu từ `workspace_id`.
+### 8.1 Workspace isolation
 
-**2. Workspace chỉ có 2 tầng**
-`level = 0` (tổng) và `level = 1` (chi nhánh). Constraint `CHK_workspace_level` enforce cứng.
-Nếu sau này cần "phòng ban trong chi nhánh", đó là feature riêng với bảng riêng.
+Business data hiện tại tách theo workspace và branch:
 
-**3. OWNER và ADMIN gán ở workspace tổng — AGENT gán ở chi nhánh**
-Quyền quản lý (OWNER, ADMIN) luôn ở level 0.
-Quyền làm việc (AGENT) ở level 1, hoặc level 0 nếu không có chi nhánh.
+- Customer có `workspace_id` trỏ workspace tổng.
+- Customer có `branch_id` trỏ chi nhánh.
+- Customer tag thuộc workspace tổng.
+- Chat room thuộc workspace tổng sau khi normalize từ chi nhánh.
 
-**4. Một Agent có thể thuộc nhiều chi nhánh**
-`UQ_workspace_user` đảm bảo không gán trùng trong cùng một workspace.
-Nhưng user có thể có N records trong `workspace_members` với N workspace_id khác nhau.
+### 8.2 Soft delete
 
-**5. Owner/Admin query xuyên chi nhánh**
-Không denormalize data. Query bằng:
+Các entity có soft delete hiện tại:
 
-```sql
-WHERE workspace_id = {tổng_id} OR parent_id = {tổng_id}
+- `workspaces.is_active`
+- `workspace_members.is_active`
+- `customers.is_active`
+- `chat_rooms.is_active`
+- `chat_room_members.is_active`
+
+### 8.3 Những bảng chưa có trong implementation hiện tại
+
+Các bảng/feature trong tài liệu cũ nhưng chưa có entity/controller/schema hiện tại:
+
+```text
+tasks
+notifications
+audit_logs
+conversations
+conversation_members
+messages theo mô hình customer conversation
 ```
 
-**6. Soft delete cho workspace và membership**
-`workspaces.is_active = 0` và `workspace_members.is_active = 0`
-thay vì xóa record — giữ lại audit trail.
+Chat hiện tại là chat nội bộ giữa users (`chat_rooms`, `chat_room_members`, `chat_messages`), không phải conversation với customer.
 
 ---
 
-## 13. Tóm tắt 13 bảng MVP
+## 9. Checklist khi cập nhật tiếp
 
-| #   | Bảng                   | Ghi chú quan trọng                                                |
-| --- | ---------------------- | ----------------------------------------------------------------- |
-| 1   | `users`                | `system_role` chỉ cho platform operator                           |
-| 2   | `roles`                | 3 roles: OWNER / ADMIN / AGENT                                    |
-| 3   | `workspaces`           | Self-ref: `parent_id` NULL = tổng, non-NULL = chi nhánh           |
-| 4   | `workspace_members`    | OWNER+ADMIN → tổng; AGENT → chi nhánh (hoặc tổng nếu k có branch) |
-| 5   | `customers`            | `workspace_id` trỏ vào chi nhánh cụ thể                           |
-| 6   | `conversations`        | `workspace_id` = chi nhánh; `last_message_at` cho Inbox sort      |
-| 7   | `conversation_members` | Nhiều agent cùng theo dõi 1 conversation                          |
-| 8   | `messages`             | Core của realtime; index `(conversation_id, sent_at)`             |
-| 9   | `tags`                 | Thuộc workspace (tổng hoặc chi nhánh)                             |
-| 10  | `customer_tags`        | Many-to-many                                                      |
-| 11  | `tasks`                | Link customer + conversation + user                               |
-| 12  | `notifications`        | Realtime via WebSocket sau                                        |
-| 13  | `audit_logs`           | Truy vết toàn bộ hành động                                        |
+Khi code thay đổi, ưu tiên cập nhật các phần sau trong tài liệu:
+
+1. `database/schema.sql` và migration đi kèm.
+2. Entity JPA trong `flowdesk_be/entity`.
+3. Controller mappings trong `flowdesk_be/controller`.
+4. Route thực tế trong `flowdesk_fe/pages`.
+5. Store/composable frontend nếu thay đổi flow đăng nhập, workspace, customers hoặc chat.
+

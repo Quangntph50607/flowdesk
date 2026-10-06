@@ -21,16 +21,21 @@
       ]"
     >
       <!-- Avatar người khác — chỉ hiện ở bubble cuối group, không chiếm chỗ khi là tin của mình -->
-      <div v-if="!isMine" class="w-[30px] shrink-0 self-center">
+      <div
+        v-if="!isMine"
+        class="w-[30px] shrink-0 self-end"
+        :class="isLastInGroup ? 'mb-[18px]' : ''"
+      >
         <div
           v-if="isLastInGroup"
           class="w-[30px] h-[30px] rounded-full bg-gradient-to-br from-slate-700 to-slate-500 text-white text-[11px] font-semibold flex items-center justify-center"
         >
           <img
-            v-if="message.senderAvatarUrl"
-            :src="message.senderAvatarUrl"
+            v-if="senderAvatarUrl && !avatarError"
+            :src="senderAvatarUrl"
             :alt="message.senderName"
             class="w-full h-full rounded-full object-cover"
+            @error="avatarError = true"
           />
           <span v-else>{{ message.senderAvatarInitial }}</span>
         </div>
@@ -226,6 +231,7 @@ const token = useCookie("access_token");
 const isMine = computed(() => props.message.senderId === props.currentUserId);
 const lightboxUrl = ref<string | null>(null);
 const imgError = ref(false);
+const avatarError = ref(false);
 const resolvedUrl = ref<string | null | undefined>(undefined);
 
 const needsUrl = computed(
@@ -233,6 +239,15 @@ const needsUrl = computed(
     ["IMAGE", "FILE", "VIDEO", "AUDIO"].includes(props.message.type) &&
     !props.message.isRecalled,
 );
+
+const senderAvatarUrl = computed(() => cleanUrl(props.message.senderAvatarUrl));
+
+function cleanUrl(url?: string | null): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  const markdownUrl = trimmed.match(/^\[[^\]]+\]\((https?:\/\/.+)\)$/);
+  return markdownUrl?.[1] ?? trimmed;
+}
 
 // ── Border-radius theo vị trí trong group (Messenger style) ─────────────────
 //
@@ -322,6 +337,12 @@ watch(
   () => {
     imgError.value = false;
     if (needsUrl.value) resolveFileUrl();
+  },
+);
+watch(
+  () => props.message.senderAvatarUrl,
+  () => {
+    avatarError.value = false;
   },
 );
 
