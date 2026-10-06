@@ -28,11 +28,21 @@ export interface ChatMessage {
   content: string | null;
   isRecalled: boolean;
   isEdited: boolean;
+  replyTo?: ChatReplyPreview | null;
   /** Tên file gốc (khi type = IMAGE/FILE/VIDEO/AUDIO) */
   fileName?: string | null;
   /** Kích thước file (bytes) */
   fileSize?: number | null;
   createdAt: string;
+}
+
+export interface ChatReplyPreview {
+  id: number;
+  senderId: number;
+  senderName: string;
+  type: ChatMessage["type"];
+  content: string | null;
+  isRecalled: boolean;
 }
 
 export interface ChatLinkItem {

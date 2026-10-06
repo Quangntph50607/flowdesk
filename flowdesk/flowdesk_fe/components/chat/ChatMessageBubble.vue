@@ -13,7 +13,7 @@
     <!-- Normal message -->
     <div
       v-else
-      class="flex items-end gap-2 px-4"
+      class="group/message flex items-end gap-2 px-4"
       :class="[
         isMine ? 'flex-row-reverse' : 'flex-row',
         isLastInGroup ? 'mb-0.5' : 'mb-[2px]',
@@ -53,6 +53,41 @@
         >
           {{ message.senderName }}
         </span>
+
+        <div class="relative">
+          <div
+            v-if="!message.isRecalled"
+            class="absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover/message:opacity-100"
+            :class="
+              isMine
+                ? 'right-full mr-2 flex-row-reverse'
+                : 'left-full ml-2 flex-row'
+            "
+          >
+            <button
+              class="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              v-tooltip.top="'Trả lời'"
+              @click="$emit('reply', message)"
+            >
+              <i class="pi pi-reply text-[11px]" />
+            </button>
+            <button
+              v-if="isMine && message.type === 'TEXT'"
+              class="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+              v-tooltip.top="'Sửa'"
+              @click="$emit('edit', message)"
+            >
+              <i class="pi pi-pencil text-[11px]" />
+            </button>
+            <button
+              v-if="isMine"
+              class="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+              v-tooltip.top="'Thu hồi'"
+              @click="$emit('recall', message)"
+            >
+              <i class="pi pi-undo text-[11px]" />
+            </button>
+          </div>
 
         <!-- Recalled -->
         <div
@@ -164,7 +199,7 @@
         <!-- TEXT -->
         <div
           v-else
-          class="px-4 py-1.5 leading-relaxed break-words"
+          class="px-3.5 py-2 leading-relaxed break-words min-w-0"
           :class="[
             bubbleShapeClass,
             isMine
@@ -172,7 +207,44 @@
               : 'bg-white text-slate-900 border border-slate-200 shadow-sm',
           ]"
         >
+          <div
+            v-if="message.replyTo"
+            class="mb-1.5 flex items-center gap-2 overflow-hidden rounded-[10px] border-l-[3px] px-2 py-1.5 text-xs"
+            :class="
+              isMine
+                ? 'border-blue-400 bg-white/10 text-white/80'
+                : 'border-blue-500 bg-slate-100 text-slate-500'
+            "
+          >
+            <img
+              v-if="replyPreviewImageUrl"
+              :src="replyPreviewImageUrl"
+              alt="Ảnh được trả lời"
+              class="h-9 w-10 shrink-0 rounded object-cover bg-white"
+            />
+            <div
+              v-else-if="message.replyTo.type !== 'TEXT'"
+              class="h-9 w-10 shrink-0 rounded bg-white flex items-center justify-center text-slate-500"
+            >
+              <i :class="replyPreviewIcon" />
+            </div>
+            <div class="min-w-0">
+              <p
+                class="truncate font-semibold"
+                :class="isMine ? 'text-white' : 'text-slate-700'"
+              >
+                {{ message.replyTo.senderName }}
+              </p>
+              <p
+                class="mt-0.5 truncate"
+                :class="isMine ? 'text-white/70' : 'text-slate-500'"
+              >
+                {{ replyPreviewText }}
+              </p>
+            </div>
+          </div>
           <p class="text-sm">{{ message.content }}</p>
+        </div>
         </div>
 
         <!-- Timestamp — chỉ hiện ở bubble cuối group -->
@@ -187,6 +259,7 @@
             · đã chỉnh sửa
           </span>
         </div>
+
       </div>
     </div>
 
@@ -225,6 +298,12 @@ const props = defineProps<{
   isLastInGroup?: boolean;
 }>();
 
+defineEmits<{
+  (e: "reply", message: ChatMessage): void;
+  (e: "edit", message: ChatMessage): void;
+  (e: "recall", message: ChatMessage): void;
+}>();
+
 const config = useRuntimeConfig();
 const token = useCookie("access_token");
 
@@ -241,6 +320,29 @@ const needsUrl = computed(
 );
 
 const senderAvatarUrl = computed(() => cleanUrl(props.message.senderAvatarUrl));
+const replyPreviewText = computed(() => {
+  const reply = props.message.replyTo;
+  if (!reply) return "";
+  if (reply.isRecalled) return "Tin nhắn đã được thu hồi";
+  if (reply.type === "IMAGE") return "[Hình ảnh]";
+  if (reply.type === "FILE") return "File";
+  if (reply.type === "VIDEO") return "Đã gửi video";
+  if (reply.type === "AUDIO") return "Đã gửi audio";
+  return reply.content ?? "";
+});
+const replyPreviewImageUrl = computed(() => {
+  const reply = props.message.replyTo;
+  if (!reply || reply.type !== "IMAGE" || !reply.content || reply.isRecalled) {
+    return null;
+  }
+  return cleanUrl(reply.content);
+});
+const replyPreviewIcon = computed(() => {
+  const type = props.message.replyTo?.type;
+  if (type === "VIDEO") return "pi pi-video text-[15px]";
+  if (type === "AUDIO") return "pi pi-volume-up text-[15px]";
+  return "pi pi-file text-[15px]";
+});
 
 function cleanUrl(url?: string | null): string | null {
   if (!url) return null;

@@ -66,6 +66,19 @@ public class ChatServiceImpl implements ChatService {
         .orElseThrow(() -> AppException.forbidden("Bạn không thuộc conversation này"));
   }
 
+  private ChatMessage findMessageInRoom(Long messageId, Long roomId) {
+    return messageRepo.findById(messageId)
+        .filter(message -> message.getRoom().getId().equals(roomId))
+        .orElseThrow(() -> AppException.notFound("Không tìm thấy tin nhắn"));
+  }
+
+  private ChatMessage findReplyMessage(Long roomId, Long replyToMessageId) {
+    if (replyToMessageId == null) {
+      return null;
+    }
+    return findMessageInRoom(replyToMessageId, roomId);
+  }
+
   // Kiểm tra user là thành viên active của workspace (workspace isolation)
   // Hỗ trợ cả workspace cha lẫn workspace con (level=1)
   private void assertInWorkspace(Long workspaceId, Long userId) {
@@ -273,13 +286,14 @@ public class ChatServiceImpl implements ChatService {
   @Override
   @Transactional
   public MessageResponse sendMessage(Long roomId, String content, String type,
-      String fileName, Long fileSize, String email) {
+      String fileName, Long fileSize, Long replyToMessageId, String email) {
     User me = findUser(email);
     ChatRoomMember membership = assertActiveMember(roomId, me.getId());
     ChatRoom room = membership.getRoom();
 
     // Normalize type – chỉ chấp nhận các giá trị hợp lệ
     String msgType = normalizeMessageType(type);
+    ChatMessage replyTo = findReplyMessage(roomId, replyToMessageId);
 
     ChatMessage msg = ChatMessage.builder()
         .room(room)
@@ -288,6 +302,7 @@ public class ChatServiceImpl implements ChatService {
         .content(content)
         .fileName(fileName)
         .fileSize(fileSize)
+        .replyToMessage(replyTo)
         .build();
     msg = messageRepo.save(msg);
 
@@ -296,6 +311,57 @@ public class ChatServiceImpl implements ChatService {
     roomRepo.save(room);
 
     return MessageResponse.from(msg, resolveSharedFileUrl(me.getAvatarUrl()));
+  }
+
+  @Override
+  @Transactional
+  public MessageResponse editMessage(Long roomId, Long messageId, String content, String email) {
+    User me = findUser(email);
+    assertActiveMember(roomId, me.getId());
+    ChatMessage message = findMessageInRoom(messageId, roomId);
+
+    if (!message.getSender().getId().equals(me.getId())) {
+      throw AppException.forbidden("Bạn chỉ có thể sửa tin nhắn của mình");
+    }
+    if ("SYSTEM".equals(message.getType()) || !"TEXT".equals(message.getType())) {
+      throw AppException.badRequest("Chỉ có thể sửa tin nhắn văn bản");
+    }
+    if (Boolean.TRUE.equals(message.getIsRecalled())) {
+      throw AppException.badRequest("Tin nhắn đã thu hồi không thể chỉnh sửa");
+    }
+    if (content == null || content.isBlank()) {
+      throw AppException.badRequest("Nội dung không được để trống");
+    }
+
+    message.setContent(content.trim());
+    message.setIsEdited(true);
+    ChatMessage saved = messageRepo.save(message);
+    return MessageResponse.from(saved, resolveSharedFileUrl(me.getAvatarUrl()));
+  }
+
+  @Override
+  @Transactional
+  public MessageResponse recallMessage(Long roomId, Long messageId, String email) {
+    User me = findUser(email);
+    assertActiveMember(roomId, me.getId());
+    ChatMessage message = findMessageInRoom(messageId, roomId);
+
+    if (!message.getSender().getId().equals(me.getId())) {
+      throw AppException.forbidden("Bạn chỉ có thể thu hồi tin nhắn của mình");
+    }
+    if ("SYSTEM".equals(message.getType())) {
+      throw AppException.badRequest("Không thể thu hồi tin hệ thống");
+    }
+    if (Boolean.TRUE.equals(message.getIsRecalled())) {
+      return MessageResponse.from(message, resolveSharedFileUrl(me.getAvatarUrl()));
+    }
+
+    message.setContent(null);
+    message.setFileName(null);
+    message.setFileSize(null);
+    message.setIsRecalled(true);
+    ChatMessage saved = messageRepo.save(message);
+    return MessageResponse.from(saved, resolveSharedFileUrl(me.getAvatarUrl()));
   }
 
   private String normalizeMessageType(String type) {

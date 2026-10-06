@@ -39,6 +39,7 @@ public class ChatWebSocketController {
         req.getType(),
         req.getFileName(),
         req.getFileSize(),
+        req.getReplyToMessageId(),
         principal.getName());
 
     messagingTemplate.convertAndSend("/topic/room/" + roomId, saved);

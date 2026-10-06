@@ -32,4 +32,9 @@ public class SendMessageRequest {
    * Kích thước file (bytes), chỉ dùng khi type != TEXT.
    */
   private Long fileSize;
+
+  /**
+   * Message được reply, nếu có.
+   */
+  private Long replyToMessageId;
 }

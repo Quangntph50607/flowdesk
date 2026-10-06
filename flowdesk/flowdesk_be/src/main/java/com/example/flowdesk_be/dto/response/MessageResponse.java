@@ -18,6 +18,7 @@ public class MessageResponse {
   private String content;
   private Boolean isRecalled;
   private Boolean isEdited;
+  private ReplyPreview replyTo;
   /** Tên file gốc (khi type = IMAGE / FILE / VIDEO / AUDIO) */
   private String fileName;
   /** Kích thước file (bytes) */
@@ -43,9 +44,35 @@ public class MessageResponse {
         .content(msg.getIsRecalled() ? null : msg.getContent())
         .isRecalled(msg.getIsRecalled())
         .isEdited(msg.getIsEdited())
+        .replyTo(buildReplyPreview(msg.getReplyToMessage()))
         .fileName(msg.getIsRecalled() ? null : msg.getFileName())
         .fileSize(msg.getIsRecalled() ? null : msg.getFileSize())
         .createdAt(msg.getCreatedAt())
         .build();
+  }
+
+  private static ReplyPreview buildReplyPreview(ChatMessage replyTo) {
+    if (replyTo == null) {
+      return null;
+    }
+    return ReplyPreview.builder()
+        .id(replyTo.getId())
+        .senderId(replyTo.getSender().getId())
+        .senderName(replyTo.getSender().getFullName())
+        .type(replyTo.getType())
+        .content(replyTo.getIsRecalled() ? null : replyTo.getContent())
+        .isRecalled(replyTo.getIsRecalled())
+        .build();
+  }
+
+  @Getter
+  @Builder
+  public static class ReplyPreview {
+    private Long id;
+    private Long senderId;
+    private String senderName;
+    private String type;
+    private String content;
+    private Boolean isRecalled;
   }
 }

@@ -26,6 +26,10 @@ public class ChatMessage {
   @JoinColumn(name = "sender_id", nullable = false)
   private User sender;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "reply_to_message_id")
+  private ChatMessage replyToMessage;
+
   @Builder.Default
   @Column(nullable = false, length = 20)
   private String type = "TEXT";

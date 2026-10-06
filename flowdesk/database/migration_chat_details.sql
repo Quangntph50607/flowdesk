@@ -11,6 +11,17 @@ BEGIN
 END
 GO
 
+IF OBJECT_ID('chat_messages', 'U') IS NOT NULL
+BEGIN
+    IF COL_LENGTH('chat_messages', 'reply_to_message_id') IS NULL
+        ALTER TABLE chat_messages ADD reply_to_message_id BIGINT NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_chat_messages_reply_to')
+        ALTER TABLE chat_messages
+        ADD CONSTRAINT FK_chat_messages_reply_to FOREIGN KEY (reply_to_message_id) REFERENCES chat_messages(id);
+END
+GO
+
 IF OBJECT_ID('chat_room_members', 'U') IS NOT NULL
 BEGIN
     IF COL_LENGTH('chat_room_members', 'is_muted') IS NULL

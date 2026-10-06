@@ -64,14 +64,18 @@ export const useChat = () => {
     subscriptions.delete(key);
   }
 
-  function sendWsMessage(roomId: number, content: string) {
+  function sendWsMessage(
+    roomId: number,
+    content: string,
+    replyToMessageId?: number | null,
+  ) {
     if (!client?.connected) {
       console.warn("[WS] Not connected, cannot send");
       return;
     }
     client.publish({
       destination: `/app/chat/${roomId}/send`,
-      body: JSON.stringify({ type: "TEXT", content }),
+      body: JSON.stringify({ type: "TEXT", content, replyToMessageId }),
     });
   }
 
@@ -81,6 +85,7 @@ export const useChat = () => {
     fileType: "IMAGE" | "FILE" | "VIDEO" | "AUDIO",
     fileName: string,
     fileSize: number,
+    replyToMessageId?: number | null,
   ) {
     if (!client?.connected) {
       console.warn("[WS] Not connected, cannot send file");
@@ -93,6 +98,7 @@ export const useChat = () => {
         content: fileUrl,
         fileName,
         fileSize,
+        replyToMessageId,
       }),
     });
   }
