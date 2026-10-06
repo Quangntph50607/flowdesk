@@ -140,6 +140,8 @@
             :info-open="showGroupInfo"
             @send="handleSend"
             @send-file="handleSendFile"
+            @edit-message="handleEditMessage"
+            @recall-message="handleRecallMessage"
             @load-more="handleLoadMore"
             @toggle-info="handleToggleInfo"
           />
@@ -495,9 +497,9 @@ async function handleLoadMore() {
   chatWindowRef.value?.preserveScrollAfterPrepend(prevHeight);
 }
 
-function handleSend(content: string) {
+function handleSend(content: string, replyToMessageId?: number | null) {
   if (!chatStore.activeRoomId) return;
-  sendWsMessage(chatStore.activeRoomId, content);
+  sendWsMessage(chatStore.activeRoomId, content, replyToMessageId);
 }
 
 function handleSendFile(
@@ -505,9 +507,47 @@ function handleSendFile(
   fileType: "IMAGE" | "FILE" | "VIDEO" | "AUDIO",
   fileName: string,
   fileSize: number,
+  replyToMessageId?: number | null,
 ) {
   if (!chatStore.activeRoomId) return;
-  sendWsFile(chatStore.activeRoomId, fileUrl, fileType, fileName, fileSize);
+  sendWsFile(chatStore.activeRoomId, fileUrl, fileType, fileName, fileSize, replyToMessageId);
+}
+
+async function handleEditMessage(messageId: number, content: string) {
+  const roomId = chatStore.activeRoomId;
+  if (!roomId) return;
+  try {
+    const res = await api.patch(
+      `/api/workspaces/${wsId()}/chat/rooms/${roomId}/messages/${messageId}`,
+      { content },
+    );
+    chatStore.updateMessage(res.data.data);
+  } catch (e: any) {
+    toast.add({
+      severity: "error",
+      summary: "Lỗi",
+      detail: e.response?.data?.message ?? "Không thể sửa tin nhắn",
+      life: 3000,
+    });
+  }
+}
+
+async function handleRecallMessage(messageId: number) {
+  const roomId = chatStore.activeRoomId;
+  if (!roomId) return;
+  try {
+    const res = await api.patch(
+      `/api/workspaces/${wsId()}/chat/rooms/${roomId}/messages/${messageId}/recall`,
+    );
+    chatStore.updateMessage(res.data.data);
+  } catch (e: any) {
+    toast.add({
+      severity: "error",
+      summary: "Lỗi",
+      detail: e.response?.data?.message ?? "Không thể thu hồi tin nhắn",
+      life: 3000,
+    });
+  }
 }
 
 async function handleToggleInfo() {

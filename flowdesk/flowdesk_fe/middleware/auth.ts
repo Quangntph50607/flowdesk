@@ -26,7 +26,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   const needsWorkspace =
-    !authStore.isSuperAdmin && authStore.myWorkspaces.length === 0;
+    !authStore.isSuperAdmin && !authStore.hasWorkspaceAccess;
 
   if (needsWorkspace && to.path !== "/setup-workspace") {
     return navigateTo("/setup-workspace");

@@ -18,7 +18,11 @@ public interface ChatService {
   Page<MessageResponse> getMessages(Long roomId, int page, int size, String email);
 
   MessageResponse sendMessage(Long roomId, String content, String type,
-      String fileName, Long fileSize, String email);
+      String fileName, Long fileSize, Long replyToMessageId, String email);
+
+  MessageResponse editMessage(Long roomId, Long messageId, String content, String email);
+
+  MessageResponse recallMessage(Long roomId, Long messageId, String email);
 
   void markRead(Long roomId, String email);
 

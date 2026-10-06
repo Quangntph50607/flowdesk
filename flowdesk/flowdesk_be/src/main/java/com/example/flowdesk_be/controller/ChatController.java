@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +22,7 @@ import java.util.Map;
 public class ChatController {
 
   private final ChatService chatService;
+  private final SimpMessagingTemplate messagingTemplate;
 
   @GetMapping("/rooms")
   public ResponseEntity<ApiResponse<PageResponse<RoomResponse>>> getMyRooms(
@@ -68,6 +70,29 @@ public class ChatController {
       @AuthenticationPrincipal UserDetails ud) {
     chatService.markRead(roomId, ud.getUsername());
     return ResponseEntity.ok(ApiResponse.success(200, "OK", null));
+  }
+
+  @PatchMapping("/rooms/{roomId}/messages/{messageId}")
+  public ResponseEntity<ApiResponse<MessageResponse>> editMessage(
+      @PathVariable Long workspaceId,
+      @PathVariable Long roomId,
+      @PathVariable Long messageId,
+      @Valid @RequestBody UpdateMessageRequest req,
+      @AuthenticationPrincipal UserDetails ud) {
+    MessageResponse updated = chatService.editMessage(roomId, messageId, req.getContent(), ud.getUsername());
+    messagingTemplate.convertAndSend("/topic/room/" + roomId, updated);
+    return ResponseEntity.ok(ApiResponse.success(200, "OK", updated));
+  }
+
+  @PatchMapping("/rooms/{roomId}/messages/{messageId}/recall")
+  public ResponseEntity<ApiResponse<MessageResponse>> recallMessage(
+      @PathVariable Long workspaceId,
+      @PathVariable Long roomId,
+      @PathVariable Long messageId,
+      @AuthenticationPrincipal UserDetails ud) {
+    MessageResponse updated = chatService.recallMessage(roomId, messageId, ud.getUsername());
+    messagingTemplate.convertAndSend("/topic/room/" + roomId, updated);
+    return ResponseEntity.ok(ApiResponse.success(200, "OK", updated));
   }
 
   @PostMapping("/rooms/{roomId}/members/{targetUserId}")

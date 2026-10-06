@@ -69,35 +69,53 @@ export const useChatStore = defineStore("chat", {
       }
     },
 
-    /** Nhận 1 message mới qua realtime → append và cập nhật room list. */
+    /** Nhận message qua realtime. Message cũ thì replace, message mới thì append. */
     appendMessage(msg: ChatMessage) {
       const roomId = msg.roomId;
       if (!this.messages[roomId]) this.messages[roomId] = [];
+      const existingIndex = this.messages[roomId].findIndex((m) => m.id === msg.id);
+      if (existingIndex !== -1) {
+        this.messages[roomId][existingIndex] = msg;
+        this.updateRoomLastMessage(roomId, msg);
+        return;
+      }
       this.messages[roomId].push(msg);
 
       // Cập nhật lastMessage + sort room lên đầu
       const idx = this.rooms.findIndex((r) => r.id === roomId);
       if (idx !== -1) {
         const room = { ...this.rooms[idx] };
-        room.lastMessage = msg.isRecalled
-          ? "Tin nhắn đã được thu hồi"
-          : msg.type === "IMAGE"
-            ? "🖼️ Đã gửi ảnh"
-            : msg.type === "FILE"
-              ? `📎 ${msg.fileName ?? "File"}`
-              : msg.type === "VIDEO"
-                ? "🎥 Đã gửi video"
-                : msg.type === "AUDIO"
-                  ? "🎵 Đã gửi audio"
-                  : msg.type === "SYSTEM"
-                    ? msg.content
-                    : msg.content;
+        room.lastMessage = this.messageSummary(msg);
         room.lastMessageAt = msg.createdAt;
         if (roomId !== this.activeRoomId) {
           room.unreadCount = (room.unreadCount ?? 0) + 1;
         }
         this.rooms = [room, ...this.rooms.filter((r) => r.id !== roomId)];
       }
+    },
+
+    updateMessage(msg: ChatMessage) {
+      const roomId = msg.roomId;
+      const existingIndex = this.messages[roomId]?.findIndex((m) => m.id === msg.id) ?? -1;
+      if (existingIndex !== -1) {
+        this.messages[roomId][existingIndex] = msg;
+      }
+      this.updateRoomLastMessage(roomId, msg);
+    },
+
+    updateRoomLastMessage(roomId: number, msg: ChatMessage) {
+      const room = this.rooms.find((r) => r.id === roomId);
+      if (!room || room.lastMessageAt !== msg.createdAt) return;
+      room.lastMessage = this.messageSummary(msg);
+    },
+
+    messageSummary(msg: ChatMessage): string | null {
+      if (msg.isRecalled) return "Tin nhắn đã được thu hồi";
+      if (msg.type === "IMAGE") return "Đã gửi ảnh";
+      if (msg.type === "FILE") return msg.fileName ?? "File";
+      if (msg.type === "VIDEO") return "Đã gửi video";
+      if (msg.type === "AUDIO") return "Đã gửi audio";
+      return msg.content;
     },
 
     clearUnread(roomId: number) {

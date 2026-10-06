@@ -100,6 +100,11 @@
           :show-sender-name="room.type === 'GROUP'"
           :is-first-in-group="item.isFirst"
           :is-last-in-group="item.isLast"
+          :highlighted="highlightedMessageId === item.msg.id"
+          @reply="startReply"
+          @edit="startEdit"
+          @recall="$emit('recallMessage', $event.id)"
+          @jump-to-message="jumpToMessage"
         />
       </template>
 
@@ -177,6 +182,52 @@
           <i v-if="uploading" class="pi pi-spin pi-spinner text-[11px]" />
           <i v-else class="pi pi-send text-[11px]" />
           {{ uploading ? uploadProgress + "%" : "Gửi" }}
+        </button>
+      </div>
+    </Transition>
+
+    <Transition
+      enter-active-class="transition-all duration-200 ease-in"
+      leave-active-class="transition-all duration-200 ease-in"
+      enter-from-class="translate-y-2 opacity-0"
+      leave-to-class="translate-y-2 opacity-0"
+    >
+      <div
+        v-if="replyTarget || editingMessage"
+        class="px-4 py-2 bg-white border-t border-slate-100 flex items-center gap-3"
+      >
+        <div
+          class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 shrink-0"
+        >
+          <i
+            :class="
+              editingMessage
+                ? 'pi pi-pencil text-[13px]'
+                : 'pi pi-reply text-[13px]'
+            "
+          />
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-xs font-semibold text-slate-700">
+            {{
+              editingMessage
+                ? "Sửa tin nhắn"
+                : `Trả lời ${replyTarget?.senderName}`
+            }}
+          </p>
+          <p class="text-xs text-slate-400 truncate">
+            {{
+              editingMessage
+                ? editingMessage.content
+                : previewMessage(replyTarget)
+            }}
+          </p>
+        </div>
+        <button
+          class="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors shrink-0"
+          @click="clearComposerMode"
+        >
+          <i class="pi pi-times text-[12px]" />
         </button>
       </div>
     </Transition>
@@ -259,19 +310,25 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "send", content: string): void;
+  (e: "send", content: string, replyToMessageId?: number | null): void;
   (
     e: "sendFile",
     fileUrl: string,
     fileType: "IMAGE" | "FILE" | "VIDEO" | "AUDIO",
     fileName: string,
     fileSize: number,
+    replyToMessageId?: number | null,
   ): void;
+  (e: "editMessage", messageId: number, content: string): void;
+  (e: "recallMessage", messageId: number): void;
   (e: "loadMore"): void;
   (e: "toggleInfo"): void;
 }>();
 
 const inputText = ref("");
+const replyTarget = ref<ChatMessage | null>(null);
+const editingMessage = ref<ChatMessage | null>(null);
+const highlightedMessageId = ref<number | null>(null);
 const messagesContainerRef = ref<HTMLElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const toast = useAppToast();
@@ -384,8 +441,31 @@ const { uploading, uploadProgress, uploadChatFile } = useFileUpload();
 function handleSend() {
   const content = inputText.value.trim();
   if (!content) return;
-  emit("send", content);
+  if (editingMessage.value) {
+    emit("editMessage", editingMessage.value.id, content);
+    inputText.value = "";
+    clearComposerMode();
+    return;
+  }
+  emit("send", content, replyTarget.value?.id ?? null);
   inputText.value = "";
+  replyTarget.value = null;
+}
+
+function startReply(message: ChatMessage) {
+  editingMessage.value = null;
+  replyTarget.value = message;
+}
+
+function startEdit(message: ChatMessage) {
+  replyTarget.value = null;
+  editingMessage.value = message;
+  inputText.value = message.content ?? "";
+}
+
+function clearComposerMode() {
+  replyTarget.value = null;
+  editingMessage.value = null;
 }
 
 function onFileSelected(e: Event) {
@@ -435,8 +515,10 @@ async function handleSendFile() {
     resolveMessageType(pendingFile.value),
     result.fileName,
     result.fileSize,
+    replyTarget.value?.id ?? null,
   );
   clearPendingFile();
+  replyTarget.value = null;
 }
 
 function clearPendingFile() {
@@ -447,6 +529,31 @@ function clearPendingFile() {
 function onScroll(e: Event) {
   const el = e.target as HTMLElement;
   if (el.scrollTop < 60 && !props.loadingMore) emit("loadMore");
+}
+
+function jumpToMessage(messageId: number) {
+  const container = messagesContainerRef.value;
+  if (!container) return;
+
+  const target = container.querySelector<HTMLElement>(
+    `[data-chat-message-id="${messageId}"]`,
+  );
+
+  if (!target) {
+    toast.add({
+      severity: "info",
+      summary: "Chưa tải tin nhắn gốc",
+      detail: "Kéo lên để tải thêm rồi bấm lại vào phần trả lời.",
+      life: 2500,
+    });
+    return;
+  }
+
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  highlightedMessageId.value = messageId;
+  window.setTimeout(() => {
+    if (highlightedMessageId.value === messageId) highlightedMessageId.value = null;
+  }, 1500);
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -466,6 +573,15 @@ function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+function previewMessage(message: ChatMessage | null) {
+  if (!message) return "";
+  if (message.isRecalled) return "Tin nhắn đã được thu hồi";
+  if (message.type === "IMAGE") return "Đã gửi ảnh";
+  if (message.type === "FILE") return message.fileName ?? "File";
+  if (message.type === "VIDEO") return "Đã gửi video";
+  if (message.type === "AUDIO") return "Đã gửi audio";
+  return message.content ?? "";
 }
 
 // ── Expose ───────────────────────────────────────────────────────
