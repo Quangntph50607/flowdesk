@@ -185,10 +185,15 @@
     >
       <div class="flex items-center justify-between py-2.5">
         <div class="flex items-center gap-2.5">
-          <i class="pi pi-bell text-[13px] text-slate-500" />
-          <span class="text-[13px] text-slate-700">Notification</span>
+          <i
+            class="pi text-[13px] text-slate-500"
+            :class="room.isMuted ? 'pi-bell-slash' : 'pi-bell'"
+          />
+          <span class="text-[13px] text-slate-700">
+            {{ room.isMuted ? "Bật thông báo" : "Tắt thông báo" }}
+          </span>
         </div>
-        <ToggleSwitch v-model="notifOn" />
+        <ToggleSwitch v-model="notificationEnabled" />
       </div>
       <div class="flex items-center justify-between py-2.5">
         <div class="flex items-center gap-2.5">
@@ -457,6 +462,7 @@ const emit = defineEmits<{
   (e: "updateAvatar", file: File): void;
   (e: "leaveRoom"): void;
   (e: "deleteRoom"): void;
+  (e: "toggleMute", roomId: number): void;
 }>();
 
 const editingName = ref(false);
@@ -464,7 +470,6 @@ const newName = ref("");
 const avatarInputRef = ref<HTMLInputElement | null>(null);
 const panelView = ref<"info" | "members">("info");
 const openMemberMenuId = ref<number | null>(null);
-const notifOn = ref(true);
 const soundOn = ref(false);
 const activeSharedTab = ref<"media" | "link" | "docs">("media");
 const canManageGroup = computed(
@@ -474,6 +479,10 @@ const directPeer = computed(
   () => props.members.find((m) => m.userId !== props.currentUserId) ?? null,
 );
 const previewMembers = computed(() => props.members.slice(0, 3));
+const notificationEnabled = computed({
+  get: () => !props.room.isMuted,
+  set: () => emit("toggleMute", props.room.id),
+});
 
 const sharedTabs = [
   { key: "media", label: "Media" },

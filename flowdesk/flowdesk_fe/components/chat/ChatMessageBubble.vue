@@ -71,28 +71,28 @@
               class="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
               @click="$emit('reply', message)"
             >
-              <i class="pi pi-reply text-[11px]" />
+              <i class="pi pi-reply" style="font-size: 11px;" />
             </button>
             <button
               v-if="isMine && message.type === 'TEXT'"
               class="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
               @click="$emit('edit', message)"
             >
-              <i class="pi pi-pencil text-[11px]" />
+              <i class="pi pi-pencil" style="font-size: 11px;" />
             </button>
             <button
               v-if="isMine"
               class="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
               @click="$emit('recall', message)"
             >
-              <i class="pi pi-undo text-[11px]" />
+              <i class="pi pi-undo" style="font-size: 11px;" />
             </button>
           </div>
 
           <!-- Recalled -->
           <div
             v-if="message.isRecalled"
-            class="px-3.5 py-2 border border-slate-400 text-slate-500 text-sm italic min-w-0"
+            class="px-3.5 py-2 border border-slate-300 text-slate-500 text-sm italic min-w-0"
             :class="bubbleShapeClass"
           >
             <p class="text-sm italic opacity-50">Tin nhắn đã được thu hồi</p>
@@ -120,7 +120,7 @@
               class="flex items-center gap-2 px-3 py-2 text-slate-500 text-xs bg-slate-100"
               :class="imgBorderClass"
             >
-              <i class="pi pi-image text-base" />
+              <i class="pi pi-image" style="font-size: 13px;" />
               <span>Không tải được ảnh</span>
             </div>
           </div>

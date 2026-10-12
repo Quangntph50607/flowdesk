@@ -1,5 +1,6 @@
 package com.example.flowdesk_be.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 import java.time.LocalDateTime;
@@ -17,4 +18,9 @@ public class RoomResponse {
     private LocalDateTime lastMessageAt;
     private int unreadCount;
     private boolean isOwner;       // current user có phải owner không (GROUP)
+    @JsonProperty("isMuted")
+    private boolean isMuted;
+
+    @JsonProperty("isPinned")
+    private boolean isPinned;
 }

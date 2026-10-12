@@ -157,6 +157,8 @@ public class ChatServiceImpl implements ChatService {
         .lastMessageAt(last == null ? room.getCreatedAt() : last.getCreatedAt())
         .unreadCount((int) unread)
         .isOwner(Boolean.TRUE.equals(membership.getIsOwner()))
+        .isMuted(Boolean.TRUE.equals(membership.getIsMuted()))
+        .isPinned(Boolean.TRUE.equals(membership.getIsPinned()))
         .build();
   }
 
@@ -384,6 +386,26 @@ public class ChatServiceImpl implements ChatService {
     ChatRoomMember membership = assertActiveMember(roomId, me.getId());
     membership.setLastReadAt(LocalDateTime.now());
     memberRepo.save(membership);
+  }
+
+  @Override
+  @Transactional
+  public RoomResponse togglePin(Long roomId, String email) {
+    User me = findUser(email);
+    ChatRoomMember membership = assertActiveMember(roomId, me.getId());
+    membership.setIsPinned(!Boolean.TRUE.equals(membership.getIsPinned()));
+    ChatRoomMember saved = memberRepo.save(membership);
+    return buildRoomResponse(saved, me.getId());
+  }
+
+  @Override
+  @Transactional
+  public RoomResponse toggleMute(Long roomId, String email) {
+    User me = findUser(email);
+    ChatRoomMember membership = assertActiveMember(roomId, me.getId());
+    membership.setIsMuted(!Boolean.TRUE.equals(membership.getIsMuted()));
+    ChatRoomMember saved = memberRepo.save(membership);
+    return buildRoomResponse(saved, me.getId());
   }
 
   @Override

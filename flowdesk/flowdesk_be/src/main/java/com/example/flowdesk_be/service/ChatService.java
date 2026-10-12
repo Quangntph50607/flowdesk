@@ -26,6 +26,10 @@ public interface ChatService {
 
   void markRead(Long roomId, String email);
 
+  RoomResponse togglePin(Long roomId, String email);
+
+  RoomResponse toggleMute(Long roomId, String email);
+
   void addMember(Long roomId, Long targetUserId, String email);
 
   void removeMember(Long roomId, Long targetUserId, String email);
