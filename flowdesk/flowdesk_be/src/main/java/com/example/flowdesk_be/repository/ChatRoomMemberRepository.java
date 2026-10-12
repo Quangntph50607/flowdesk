@@ -23,7 +23,7 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
           AND r.workspace.id = :workspaceId
           AND m.isActive = true
           AND r.isActive = true
-        ORDER BY r.updatedAt DESC
+        ORDER BY m.isPinned DESC, r.updatedAt DESC
         """)
     List<ChatRoomMember> findMyRoomsInWorkspace(
             @Param("userId") Long userId,

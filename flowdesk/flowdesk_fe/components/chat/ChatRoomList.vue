@@ -67,7 +67,7 @@
       <div
         v-for="room in filteredRooms"
         :key="room.id"
-        class="relative flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer transition-colors mb-0.5"
+        class="group relative flex items-center gap-3 px-3 py-2.5 rounded-2xl cursor-pointer transition-colors mb-0.5"
         :class="
           room.id === chatStore.activeRoomId
             ? 'bg-slate-100'
@@ -101,12 +101,31 @@
         <!-- Info -->
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between gap-1">
-            <span class="text-sm font-semibold text-slate-900 truncate">{{
-              room.name
-            }}</span>
-            <span class="text-[11px] text-slate-400 shrink-0">{{
-              formatChatTime(room.lastMessageAt)
-            }}</span>
+            <div class="flex items-center gap-1 min-w-0">
+              <i
+                v-if="room.isPinned"
+                class="fa-solid fa-thumbtack shrink-0 text-[10px] text-slate-500"
+              />
+              <span class="text-sm font-semibold text-slate-900 truncate">{{
+                room.name
+              }}</span>
+              <i
+                v-if="room.isMuted"
+                class="pi pi-bell-slash shrink-0 text-[10px] text-slate-400"
+              />
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                class="hidden group-hover:flex w-5 h-5 items-center justify-center rounded-full text-slate-400 hover:bg-white hover:text-slate-800 transition-colors"
+                aria-label="Conversation actions"
+                @click.stop="toggleRoomMenu($event, room)"
+              >
+                <i class="pi pi-ellipsis-h text-[12px]" />
+              </button>
+              <span class="text-[11px] text-slate-400">{{
+                formatChatTime(room.lastMessageAt)
+              }}</span>
+            </div>
           </div>
           <div class="flex items-center justify-between gap-1 mt-0.5">
             <span
@@ -123,7 +142,7 @@
             <Badge
               v-if="room.unreadCount > 0"
               :value="String(room.unreadCount > 99 ? '99+' : room.unreadCount)"
-              severity="danger"
+              :severity="room.isMuted ? 'secondary' : 'danger'"
               class="shrink-0"
               style="font-size: 10px; min-width: 18px; height: 18px"
             />
@@ -139,25 +158,31 @@
         </p>
       </div>
     </div>
+    <Menu ref="roomMenu" :model="roomMenuItems" :popup="true" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
+import Menu from "primevue/menu";
 import type { ChatRoom } from "~/types/chat";
 import { formatChatTime } from "~/utils/chatFormat";
 
 const props = defineProps<{ rooms: ChatRoom[] }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "selectRoom", id: number): void;
   (e: "openNewDirect"): void;
   (e: "openCreateGroup"): void;
+  (e: "togglePin", id: number): void;
+  (e: "toggleMute", id: number): void;
 }>();
 
 const chatStore = useChatStore();
 const search = ref("");
 const activeTab = ref<"chat" | "group">("chat");
+const roomMenu = ref();
+const selectedRoom = ref<ChatRoom | null>(null);
 
 function formatLastMessage(msg: string | null | undefined): string {
   if (!msg) return "Chưa có tin nhắn";
@@ -170,6 +195,28 @@ function formatLastMessage(msg: string | null | undefined): string {
     return "📎 Đã gửi file";
   }
   return msg;
+}
+
+const roomMenuItems = computed(() => {
+  const room = selectedRoom.value;
+  if (!room) return [];
+  return [
+    {
+      label: room.isPinned ? "Bỏ ghim" : "Ghim",
+      icon: room.isPinned ? "fa-solid fa-thumbtack-slash" : "fa-solid fa-thumbtack",
+      command: () => emit("togglePin", room.id),
+    },
+    {
+      label: room.isMuted ? "Bật thông báo" : "Tắt thông báo",
+      icon: room.isMuted ? "pi pi-bell" : "pi pi-bell-slash",
+      command: () => emit("toggleMute", room.id),
+    },
+  ];
+});
+
+function toggleRoomMenu(event: Event, room: ChatRoom) {
+  selectedRoom.value = room;
+  roomMenu.value?.toggle(event);
 }
 
 const filteredRooms = computed(() => {

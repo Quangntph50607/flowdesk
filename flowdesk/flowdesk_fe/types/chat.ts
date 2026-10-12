@@ -13,7 +13,11 @@ export interface ChatRoom {
   lastMessageAt: string | null;
   unreadCount: number;
   isOwner: boolean;
+  isMuted: boolean;
+  isPinned: boolean;
+  muted?: boolean;
   owner?: boolean;
+  pinned?: boolean;
   memberCount?: number;
 }
 

@@ -94,6 +94,8 @@
           @select-room="openRoom"
           @open-new-direct="showNewDirect = true"
           @open-create-group="showCreateGroup = true"
+          @toggle-pin="handleTogglePin"
+          @toggle-mute="handleToggleMute"
         />
       </div>
 
@@ -173,6 +175,7 @@
             @update-avatar="handleUpdateGroupAvatar"
             @leave-room="handleLeaveRoom"
             @delete-room="handleDeleteRoom"
+            @toggle-mute="handleToggleMute"
           />
         </Transition>
       </div>
@@ -485,6 +488,38 @@ async function openRoom(roomId: number) {
 
   await nextTick();
   chatWindowRef.value?.scrollToBottom();
+}
+
+async function handleTogglePin(roomId: number) {
+  try {
+    const res = await api.patch(
+      `/api/workspaces/${wsId()}/chat/rooms/${roomId}/pin`,
+    );
+    chatStore.updateRoom(res.data.data);
+  } catch (e: any) {
+    toast.add({
+      severity: "error",
+      summary: "Lỗi",
+      detail: e.response?.data?.message ?? "Không thể ghim cuộc trò chuyện",
+      life: 3000,
+    });
+  }
+}
+
+async function handleToggleMute(roomId: number) {
+  try {
+    const res = await api.patch(
+      `/api/workspaces/${wsId()}/chat/rooms/${roomId}/mute`,
+    );
+    chatStore.updateRoom(res.data.data);
+  } catch (e: any) {
+    toast.add({
+      severity: "error",
+      summary: "Lỗi",
+      detail: e.response?.data?.message ?? "Không thể cập nhật thông báo",
+      life: 3000,
+    });
+  }
 }
 
 async function handleLoadMore() {

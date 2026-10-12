@@ -13,7 +13,18 @@ function normalizeRoom(room: ChatRoom): ChatRoom {
     ...room,
     avatarUrl: cleanUrl(room.avatarUrl),
     isOwner: room.isOwner ?? room.owner ?? false,
+    isMuted: room.isMuted ?? room.muted ?? false,
+    isPinned: room.isPinned ?? room.pinned ?? false,
   };
+}
+
+function sortRooms(rooms: ChatRoom[]): ChatRoom[] {
+  return [...rooms].sort((a, b) => {
+    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+    const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
+    const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0;
+    return bTime - aTime;
+  });
 }
 
 export const useChatStore = defineStore("chat", {
@@ -40,15 +51,15 @@ export const useChatStore = defineStore("chat", {
 
   actions: {
     setRooms(rooms: ChatRoom[]) {
-      this.rooms = rooms.map(normalizeRoom);
+      this.rooms = sortRooms(rooms.map(normalizeRoom));
     },
 
     prependRoom(room: ChatRoom) {
       const normalized = normalizeRoom(room);
-      this.rooms = [
+      this.rooms = sortRooms([
         normalized,
         ...this.rooms.filter((r) => r.id !== normalized.id),
-      ];
+      ]);
     },
 
     setActiveRoom(id: number | null) {
@@ -90,7 +101,7 @@ export const useChatStore = defineStore("chat", {
         if (roomId !== this.activeRoomId) {
           room.unreadCount = (room.unreadCount ?? 0) + 1;
         }
-        this.rooms = [room, ...this.rooms.filter((r) => r.id !== roomId)];
+        this.rooms = sortRooms([room, ...this.rooms.filter((r) => r.id !== roomId)]);
       }
     },
 
@@ -126,7 +137,10 @@ export const useChatStore = defineStore("chat", {
     updateRoom(updated: ChatRoom) {
       const normalized = normalizeRoom(updated);
       const idx = this.rooms.findIndex((r) => r.id === updated.id);
-      if (idx !== -1) this.rooms[idx] = { ...this.rooms[idx], ...normalized };
+      if (idx !== -1) {
+        this.rooms[idx] = { ...this.rooms[idx], ...normalized };
+        this.rooms = sortRooms(this.rooms);
+      }
     },
 
     removeRoom(roomId: number) {

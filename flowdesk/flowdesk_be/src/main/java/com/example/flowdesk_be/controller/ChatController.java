@@ -72,6 +72,24 @@ public class ChatController {
     return ResponseEntity.ok(ApiResponse.success(200, "OK", null));
   }
 
+  @PatchMapping("/rooms/{roomId}/pin")
+  public ResponseEntity<ApiResponse<RoomResponse>> togglePin(
+      @PathVariable Long workspaceId,
+      @PathVariable Long roomId,
+      @AuthenticationPrincipal UserDetails ud) {
+    return ResponseEntity.ok(ApiResponse.success(200, "OK",
+        chatService.togglePin(roomId, ud.getUsername())));
+  }
+
+  @PatchMapping("/rooms/{roomId}/mute")
+  public ResponseEntity<ApiResponse<RoomResponse>> toggleMute(
+      @PathVariable Long workspaceId,
+      @PathVariable Long roomId,
+      @AuthenticationPrincipal UserDetails ud) {
+    return ResponseEntity.ok(ApiResponse.success(200, "OK",
+        chatService.toggleMute(roomId, ud.getUsername())));
+  }
+
   @PatchMapping("/rooms/{roomId}/messages/{messageId}")
   public ResponseEntity<ApiResponse<MessageResponse>> editMessage(
       @PathVariable Long workspaceId,
