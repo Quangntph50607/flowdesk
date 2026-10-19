@@ -182,6 +182,66 @@ public class ChatServiceImpl implements ChatService {
   }
 
   @Override
+  public List<RoomResponse> searchRooms(Long workspaceId, String keyword, String email) {
+    User me = findUser(email);
+    Workspace ws = findWorkspace(workspaceId);
+
+    Long effectiveWorkspaceId = (ws.getLevel() != 0 && ws.getParent() != null)
+        ? ws.getParent().getId()
+        : workspaceId;
+
+    if (keyword == null || keyword.isBlank()) {
+      // Keyword rỗng → trả về toàn bộ (giống getMyRooms)
+      return memberRepo.findMyRoomsInWorkspace(me.getId(), effectiveWorkspaceId)
+          .stream().map(m -> buildRoomResponse(m, me.getId())).toList();
+    }
+
+    String kw = keyword.trim();
+
+    // Tìm GROUP theo tên nhóm + DIRECT theo tên người kia, merge và sort pinned
+    // trước
+    List<ChatRoomMember> groups = memberRepo.searchGroupRooms(me.getId(), effectiveWorkspaceId, kw);
+    List<ChatRoomMember> directs = memberRepo.searchDirectRooms(me.getId(), effectiveWorkspaceId, kw);
+
+    List<ChatRoomMember> merged = new ArrayList<>();
+    merged.addAll(groups);
+    merged.addAll(directs);
+
+    // Sắp xếp: pinned trước, sau đó theo updatedAt DESC
+    merged.sort((a, b) -> {
+      boolean aPinned = Boolean.TRUE.equals(a.getIsPinned());
+      boolean bPinned = Boolean.TRUE.equals(b.getIsPinned());
+      if (aPinned != bPinned)
+        return aPinned ? -1 : 1;
+      LocalDateTime aTime = a.getRoom().getUpdatedAt();
+      LocalDateTime bTime = b.getRoom().getUpdatedAt();
+      if (aTime == null && bTime == null)
+        return 0;
+      if (aTime == null)
+        return 1;
+      if (bTime == null)
+        return -1;
+      return bTime.compareTo(aTime);
+    });
+
+    return merged.stream().map(m -> buildRoomResponse(m, me.getId())).toList();
+  }
+
+  @Override
+  public Page<MessageResponse> searchMessages(Long roomId, String keyword, int page, int size, String email) {
+    User me = findUser(email);
+    assertActiveMember(roomId, me.getId());
+
+    if (keyword == null || keyword.isBlank()) {
+      throw AppException.badRequest("Từ khóa tìm kiếm không được để trống");
+    }
+
+    Pageable pageable = PageRequest.of(page, size);
+    Page<ChatMessage> result = messageRepo.searchMessages(roomId, keyword.trim(), pageable);
+    return result.map(msg -> MessageResponse.from(msg, resolveSharedFileUrl(msg.getSender().getAvatarUrl())));
+  }
+
+  @Override
   @Transactional
   public RoomResponse openOrCreateDirect(Long workspaceId, OpenDirectRequest req, String email) {
     User me = findUser(email);

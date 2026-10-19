@@ -44,10 +44,7 @@
       <!-- Bubble group -->
       <div
         class="flex flex-col max-w-[360px]"
-        :class="[
-          isMine ? 'items-end' : 'items-start',
-          highlighted ? 'chat-message-jump-highlight' : '',
-        ]"
+        :class="isMine ? 'items-end' : 'items-start'"
       >
         <!-- Sender name — chỉ ở bubble đầu group, không phải tin của mình -->
         <span
@@ -57,7 +54,10 @@
           {{ message.senderName }}
         </span>
 
-        <div class="relative">
+        <div
+          class="relative"
+          :class="highlighted ? 'chat-message-jump-highlight' : ''"
+        >
           <div
             v-if="!message.isRecalled"
             class="absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity group-hover/message:opacity-100"
@@ -71,21 +71,21 @@
               class="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
               @click="$emit('reply', message)"
             >
-              <i class="pi pi-reply" style="font-size: 11px;" />
+              <i class="pi pi-reply" style="font-size: 11px" />
             </button>
             <button
               v-if="isMine && message.type === 'TEXT'"
               class="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
               @click="$emit('edit', message)"
             >
-              <i class="pi pi-pencil" style="font-size: 11px;" />
+              <i class="pi pi-pencil" style="font-size: 11px" />
             </button>
             <button
               v-if="isMine"
               class="w-7 h-7 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
               @click="$emit('recall', message)"
             >
-              <i class="pi pi-undo" style="font-size: 11px;" />
+              <i class="pi pi-undo" style="font-size: 11px" />
             </button>
           </div>
 
@@ -120,7 +120,7 @@
               class="flex items-center gap-2 px-3 py-2 text-slate-500 text-xs bg-slate-100"
               :class="imgBorderClass"
             >
-              <i class="pi pi-image" style="font-size: 13px;" />
+              <i class="pi pi-image" style="font-size: 13px" />
               <span>Không tải được ảnh</span>
             </div>
           </div>
@@ -472,6 +472,7 @@ function formatFileSize(bytes?: number | null): string {
 .chat-message-jump-highlight {
   animation: chat-message-jump-highlight 1.4s ease;
   border-radius: 18px;
+  padding: 4px 4px;
 }
 
 @keyframes chat-message-jump-highlight {
