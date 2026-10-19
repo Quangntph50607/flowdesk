@@ -52,7 +52,14 @@
           <i class="pi pi-video text-[14px]" />
         </button>
         <button
-          class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+          class="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+          :class="
+            searchOpen
+              ? 'bg-slate-100 text-slate-900'
+              : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+          "
+          v-tooltip.bottom="searchOpen ? 'Đóng tìm kiếm' : 'Tìm trong chat'"
+          @click="toggleSearch"
         >
           <i class="pi pi-search text-[14px]" />
         </button>
@@ -70,6 +77,81 @@
         </button>
       </div>
     </div>
+
+    <!-- ── Search panel ─────────────────────────────────────────────── -->
+    <Transition
+      enter-active-class="transition-all duration-200 ease-in"
+      leave-active-class="transition-all duration-200 ease-in"
+      enter-from-class="max-h-0 opacity-0"
+      leave-to-class="max-h-0 opacity-0"
+      enter-to-class="max-h-64 opacity-100"
+      leave-from-class="max-h-64 opacity-100"
+    >
+      <div
+        v-if="searchOpen"
+        class="bg-white border-b border-slate-100 overflow-hidden shrink-0"
+      >
+        <div class="px-4 py-3">
+          <div
+            class="flex items-center gap-2 px-3 py-2 rounded-xl"
+            style="background: #f1f3f4"
+          >
+            <i
+              class="pi shrink-0"
+              :class="searchingMessages ? 'pi-spin pi-spinner' : 'pi-search'"
+              style="color: #94a3b8; font-size: 12px"
+            />
+            <input
+              v-model="searchKeyword"
+              placeholder="Tìm tin nhắn trong cuộc trò chuyện..."
+              class="flex-1 border-none outline-none bg-transparent text-[13px] placeholder:text-slate-400"
+              style="color: #0f172a"
+              autofocus
+            />
+            <button
+              v-if="searchKeyword"
+              class="shrink-0 text-slate-400 hover:text-slate-600"
+              aria-label="Xóa tìm kiếm"
+              @click="searchKeyword = ''"
+            >
+              <i class="pi pi-times text-[11px]" />
+            </button>
+          </div>
+
+          <!-- Results -->
+          <div
+            v-if="searchKeyword.trim()"
+            class="mt-2 overflow-y-auto chat-messages-area"
+            style="max-height: 180px"
+          >
+            <div
+              v-if="!searchingMessages && searchResults.length === 0"
+              class="py-4 text-center text-[12px] text-slate-400"
+            >
+              Không tìm thấy tin nhắn phù hợp
+            </div>
+            <button
+              v-for="msg in searchResults"
+              :key="msg.id"
+              class="w-full flex flex-col gap-0.5 px-3 py-2 rounded-lg hover:bg-slate-50 text-left transition-colors"
+              @click="jumpToSearchResult(msg.id)"
+            >
+              <div class="flex items-center gap-2">
+                <span class="text-[11px] font-semibold text-slate-700">
+                  {{ msg.senderName }}
+                </span>
+                <span class="text-[10px] text-slate-400">
+                  {{ formatChatTime(msg.createdAt) }}
+                </span>
+              </div>
+              <p class="text-[12px] text-slate-500 line-clamp-2">
+                {{ msg.content ?? "Tin nhắn đã được thu hồi" }}
+              </p>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <!-- ── Messages ─────────────────────────────────────────────────── -->
     <div
@@ -297,9 +379,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, nextTick } from "vue";
 import type { ChatRoom, ChatMessage } from "~/types/chat";
 import { useFileUpload } from "~/composables/useFileUpload";
+import { formatChatTime } from "~/utils/chatFormat";
 
 const props = defineProps<{
   room: ChatRoom;
@@ -307,6 +390,10 @@ const props = defineProps<{
   currentUserId: number;
   loadingMore: boolean;
   infoOpen?: boolean;
+  /** Kết quả tìm tin nhắn (từ API searchMessages). */
+  searchResults?: ChatMessage[];
+  /** Đang gọi API search message. */
+  searchingMessages?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -323,6 +410,10 @@ const emit = defineEmits<{
   (e: "recallMessage", messageId: number): void;
   (e: "loadMore"): void;
   (e: "toggleInfo"): void;
+  /** Tìm tin nhắn trong conversation. Parent gọi API và trả kết quả qua prop. */
+  (e: "searchMessages", keyword: string): void;
+  /** Click vào 1 kết quả search → parent load page chứa message rồi scroll tới. */
+  (e: "jumpToSearchResult", messageId: number): void;
 }>();
 
 const inputText = ref("");
@@ -332,6 +423,34 @@ const highlightedMessageId = ref<number | null>(null);
 const messagesContainerRef = ref<HTMLElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const toast = useAppToast();
+
+// ── Search state ──────────────────────────────────────────────────
+const searchOpen = ref(false);
+const searchKeyword = ref("");
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+function toggleSearch() {
+  searchOpen.value = !searchOpen.value;
+  if (!searchOpen.value) {
+    searchKeyword.value = "";
+  }
+}
+
+watch(searchKeyword, (val) => {
+  if (searchTimer) clearTimeout(searchTimer);
+  if (!val.trim()) return;
+  searchTimer = setTimeout(() => {
+    emit("searchMessages", val.trim());
+  }, 400);
+});
+
+function jumpToSearchResult(messageId: number) {
+  // Giữ nguyên panel + kết quả, chỉ scroll tới tin nhắn
+  // Đợi 1 tick để DOM ổn định trước khi emit
+  nextTick(() => {
+    emit("jumpToSearchResult", messageId);
+  });
+}
 
 // ── File size limits ─────────────────────────────────────────────
 const FILE_LIMITS: Record<string, number> = {
@@ -552,7 +671,8 @@ function jumpToMessage(messageId: number) {
   target.scrollIntoView({ behavior: "smooth", block: "center" });
   highlightedMessageId.value = messageId;
   window.setTimeout(() => {
-    if (highlightedMessageId.value === messageId) highlightedMessageId.value = null;
+    if (highlightedMessageId.value === messageId)
+      highlightedMessageId.value = null;
   }, 1500);
 }
 
@@ -590,6 +710,46 @@ function scrollToBottom(smooth = false) {
   if (!el) return;
   el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
 }
+
+function scrollToMessage(messageId: number) {
+  const el = messagesContainerRef.value;
+  if (!el) return;
+
+  const doScroll = () => {
+    const target = el.querySelector<HTMLElement>(
+      `[data-chat-message-id="${messageId}"]`,
+    );
+    if (!target) {
+      toast.add({
+        severity: "info",
+        summary: "Chưa tải tin nhắn gốc",
+        detail: "Kéo lên để tải thêm rồi bấm lại.",
+        life: 2500,
+      });
+      return;
+    }
+
+    // Tính vị trí scroll thủ công để tránh bị che bởi sticky header/footer
+    const containerRect = el.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const offset =
+      targetRect.top -
+      containerRect.top -
+      el.clientHeight / 2 +
+      target.offsetHeight / 2;
+    el.scrollBy({ top: offset, behavior: "smooth" });
+
+    highlightedMessageId.value = messageId;
+    window.setTimeout(() => {
+      if (highlightedMessageId.value === messageId)
+        highlightedMessageId.value = null;
+    }, 1800);
+  };
+
+  // Đợi 1 tick để layout ổn định (panel vẫn mở, không cần chờ transition)
+  nextTick(doScroll);
+}
+
 function preserveScrollAfterPrepend(prevScrollHeight: number) {
   const el = messagesContainerRef.value;
   if (!el) return;
@@ -598,5 +758,10 @@ function preserveScrollAfterPrepend(prevScrollHeight: number) {
 function getScrollHeight() {
   return messagesContainerRef.value?.scrollHeight ?? 0;
 }
-defineExpose({ scrollToBottom, preserveScrollAfterPrepend, getScrollHeight });
+defineExpose({
+  scrollToBottom,
+  scrollToMessage,
+  preserveScrollAfterPrepend,
+  getScrollHeight,
+});
 </script>

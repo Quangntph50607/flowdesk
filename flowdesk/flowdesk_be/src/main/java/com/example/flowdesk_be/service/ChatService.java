@@ -11,11 +11,15 @@ import java.util.Map;
 public interface ChatService {
   List<RoomResponse> getMyRooms(Long workspaceId, String email);
 
+  List<RoomResponse> searchRooms(Long workspaceId, String keyword, String email);
+
   RoomResponse openOrCreateDirect(Long workspaceId, OpenDirectRequest req, String email);
 
   RoomResponse createGroup(Long workspaceId, CreateGroupRequest req, String email);
 
   Page<MessageResponse> getMessages(Long roomId, int page, int size, String email);
+
+  Page<MessageResponse> searchMessages(Long roomId, String keyword, int page, int size, String email);
 
   MessageResponse sendMessage(Long roomId, String content, String type,
       String fileName, Long fileSize, Long replyToMessageId, String email);

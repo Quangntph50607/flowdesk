@@ -34,6 +34,15 @@ public class ChatController {
         PageResponse.fromList(chatService.getMyRooms(workspaceId, ud.getUsername()), limit, page)));
   }
 
+  @GetMapping("/rooms/search")
+  public ResponseEntity<ApiResponse<List<RoomResponse>>> searchRooms(
+      @PathVariable Long workspaceId,
+      @RequestParam String keyword,
+      @AuthenticationPrincipal UserDetails ud) {
+    return ResponseEntity.ok(ApiResponse.success(200, "OK",
+        chatService.searchRooms(workspaceId, keyword, ud.getUsername())));
+  }
+
   @PostMapping("/rooms/direct")
   public ResponseEntity<ApiResponse<RoomResponse>> openDirect(
       @PathVariable Long workspaceId,
@@ -61,6 +70,18 @@ public class ChatController {
       @AuthenticationPrincipal UserDetails ud) {
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
         chatService.getMessages(roomId, page, size, ud.getUsername())));
+  }
+
+  @GetMapping("/rooms/{roomId}/messages/search")
+  public ResponseEntity<ApiResponse<Page<MessageResponse>>> searchMessages(
+      @PathVariable Long workspaceId,
+      @PathVariable Long roomId,
+      @RequestParam String keyword,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size,
+      @AuthenticationPrincipal UserDetails ud) {
+    return ResponseEntity.ok(ApiResponse.success(200, "OK",
+        chatService.searchMessages(roomId, keyword, page, size, ud.getUsername())));
   }
 
   @PostMapping("/rooms/{roomId}/read")

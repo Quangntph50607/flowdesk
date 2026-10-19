@@ -91,11 +91,13 @@
 
         <ChatRoomList
           :rooms="chatStore.rooms"
+          :searching="searchingRooms"
           @select-room="openRoom"
           @open-new-direct="showNewDirect = true"
           @open-create-group="showCreateGroup = true"
           @toggle-pin="handleTogglePin"
           @toggle-mute="handleToggleMute"
+          @search="handleSearchRooms"
         />
       </div>
 
@@ -140,12 +142,16 @@
             :current-user-id="currentUserId"
             :loading-more="loadingMore"
             :info-open="showGroupInfo"
+            :search-results="messageSearchResults"
+            :searching-messages="searchingMessages"
             @send="handleSend"
             @send-file="handleSendFile"
             @edit-message="handleEditMessage"
             @recall-message="handleRecallMessage"
             @load-more="handleLoadMore"
             @toggle-info="handleToggleInfo"
+            @search-messages="handleSearchMessages"
+            @jump-to-search-result="handleJumpToSearchResult"
           />
         </div>
 
@@ -223,6 +229,7 @@ import type {
 // Type cho ref của ChatWindow
 interface ChatWindowExposed {
   scrollToBottom: (smooth?: boolean) => void;
+  scrollToMessage: (messageId: number) => void;
   preserveScrollAfterPrepend: (prevHeight: number) => void;
   getScrollHeight: () => number;
 }
@@ -230,6 +237,7 @@ interface ChatWindowExposed {
 definePageMeta({ middleware: "auth", layout: "default" });
 
 const api = useApi();
+const chatApi = useChatApi();
 const authStore = useAuthStore();
 const chatStore = useChatStore();
 const toast = useAppToast();
@@ -366,6 +374,11 @@ const showCreateGroup = ref(false);
 const showGroupInfo = ref(false);
 const showAddMember = ref(false);
 
+// ── Search state ──────────────────────────────────────────────────
+const searchingRooms = ref(false);
+const searchingMessages = ref(false);
+const messageSearchResults = ref<ChatMessage[]>([]);
+
 const workspaceMembers = ref<WorkspaceMember[]>([]);
 const groupMembers = ref<
   {
@@ -390,10 +403,8 @@ function wsId(): number {
 // ── Data loading ──────────────────────────────────────────────────
 async function loadRooms() {
   try {
-    const res = await api.get(`/api/workspaces/${wsId()}/chat/rooms`, {
-      params: { limit: 20, page: 1 },
-    });
-    chatStore.setRooms(getPageItems(res.data.data));
+    const rooms = await chatApi.getRooms(wsId(), { limit: 20, page: 1 });
+    chatStore.setRooms(rooms);
   } catch {
     toast.add({
       severity: "error",
@@ -424,11 +435,7 @@ async function loadWorkspaceMembers() {
 async function loadMessages(roomId: number, page: number, isFirst: boolean) {
   try {
     if (!isFirst) loadingMore.value = true;
-    const res = await api.get(
-      `/api/workspaces/${wsId()}/chat/rooms/${roomId}/messages`,
-      { params: { page, size: 30 } },
-    );
-    const pageData = res.data.data;
+    const pageData = await chatApi.getMessages(wsId(), roomId, page, 30);
     chatStore.setMessages(roomId, pageData.content ?? [], isFirst);
     chatStore.setHasMore(roomId, !pageData.last);
     chatStore.setCurrentPage(roomId, page);
@@ -446,10 +453,7 @@ async function loadMessages(roomId: number, page: number, isFirst: boolean) {
 
 async function loadGroupMembers(roomId: number) {
   try {
-    const res = await api.get(
-      `/api/workspaces/${wsId()}/chat/rooms/${roomId}/members`,
-    );
-    const payload = res.data.data ?? {};
+    const payload = await chatApi.getRoomMembers(wsId(), roomId);
     groupMembers.value = payload.members ?? [];
     groupMemberCount.value = payload.total ?? 0;
     groupSharedMedia.value = payload.media ?? [];
@@ -481,7 +485,7 @@ async function openRoom(roomId: number) {
   await loadGroupMembers(roomId);
 
   try {
-    await api.post(`/api/workspaces/${wsId()}/chat/rooms/${roomId}/read`);
+    await chatApi.markRead(wsId(), roomId);
   } catch {
     /* ignore */
   }
@@ -492,10 +496,8 @@ async function openRoom(roomId: number) {
 
 async function handleTogglePin(roomId: number) {
   try {
-    const res = await api.patch(
-      `/api/workspaces/${wsId()}/chat/rooms/${roomId}/pin`,
-    );
-    chatStore.updateRoom(res.data.data);
+    const updated = await chatApi.togglePin(wsId(), roomId);
+    chatStore.updateRoom(updated);
   } catch (e: any) {
     toast.add({
       severity: "error",
@@ -508,10 +510,8 @@ async function handleTogglePin(roomId: number) {
 
 async function handleToggleMute(roomId: number) {
   try {
-    const res = await api.patch(
-      `/api/workspaces/${wsId()}/chat/rooms/${roomId}/mute`,
-    );
-    chatStore.updateRoom(res.data.data);
+    const updated = await chatApi.toggleMute(wsId(), roomId);
+    chatStore.updateRoom(updated);
   } catch (e: any) {
     toast.add({
       severity: "error",
@@ -545,18 +545,27 @@ function handleSendFile(
   replyToMessageId?: number | null,
 ) {
   if (!chatStore.activeRoomId) return;
-  sendWsFile(chatStore.activeRoomId, fileUrl, fileType, fileName, fileSize, replyToMessageId);
+  sendWsFile(
+    chatStore.activeRoomId,
+    fileUrl,
+    fileType,
+    fileName,
+    fileSize,
+    replyToMessageId,
+  );
 }
 
 async function handleEditMessage(messageId: number, content: string) {
   const roomId = chatStore.activeRoomId;
   if (!roomId) return;
   try {
-    const res = await api.patch(
-      `/api/workspaces/${wsId()}/chat/rooms/${roomId}/messages/${messageId}`,
-      { content },
+    const updated = await chatApi.editMessage(
+      wsId(),
+      roomId,
+      messageId,
+      content,
     );
-    chatStore.updateMessage(res.data.data);
+    chatStore.updateMessage(updated);
   } catch (e: any) {
     toast.add({
       severity: "error",
@@ -571,10 +580,8 @@ async function handleRecallMessage(messageId: number) {
   const roomId = chatStore.activeRoomId;
   if (!roomId) return;
   try {
-    const res = await api.patch(
-      `/api/workspaces/${wsId()}/chat/rooms/${roomId}/messages/${messageId}/recall`,
-    );
-    chatStore.updateMessage(res.data.data);
+    const updated = await chatApi.recallMessage(wsId(), roomId, messageId);
+    chatStore.updateMessage(updated);
   } catch (e: any) {
     toast.add({
       severity: "error",
@@ -600,13 +607,90 @@ function onRealtimeMessage(msg: any) {
   }
 }
 
+// ── Search ────────────────────────────────────────────────────────
+async function handleSearchRooms(keyword: string) {
+  if (!keyword) {
+    // Clear search → tải lại danh sách đầy đủ
+    await loadRooms();
+    return;
+  }
+  searchingRooms.value = true;
+  try {
+    const results = await chatApi.searchRooms(wsId(), keyword);
+    chatStore.setRooms(results);
+  } catch {
+    toast.add({
+      severity: "error",
+      summary: "Lỗi",
+      detail: "Không tìm được cuộc trò chuyện",
+      life: 3000,
+    });
+  } finally {
+    searchingRooms.value = false;
+  }
+}
+
+async function handleSearchMessages(keyword: string) {
+  const roomId = chatStore.activeRoomId;
+  if (!roomId || !keyword) {
+    messageSearchResults.value = [];
+    return;
+  }
+  searchingMessages.value = true;
+  try {
+    const page = await chatApi.searchMessages(wsId(), roomId, keyword, 0, 20);
+    messageSearchResults.value = page.content ?? [];
+  } catch {
+    messageSearchResults.value = [];
+  } finally {
+    searchingMessages.value = false;
+  }
+}
+
+async function handleJumpToSearchResult(messageId: number) {
+  const roomId = chatStore.activeRoomId;
+  if (!roomId) return;
+
+  // Nếu message đã có trong store, scroll ngay (đợi nextTick cho DOM)
+  const alreadyLoaded = chatStore
+    .roomMessages(roomId)
+    .find((m) => m.id === messageId);
+  if (alreadyLoaded) {
+    await nextTick();
+    chatWindowRef.value?.scrollToMessage?.(messageId);
+    return;
+  }
+
+  // Load thêm các page cũ hơn cho tới khi tìm thấy hoặc hết
+  toast.add({
+    severity: "info",
+    summary: "Đang tải tin nhắn...",
+    life: 1500,
+  });
+
+  let page = chatStore.currentPage[roomId] ?? 0;
+  while (chatStore.hasMore[roomId]) {
+    page += 1;
+    await loadMessages(roomId, page, false);
+    if (chatStore.roomMessages(roomId).find((m) => m.id === messageId)) {
+      await nextTick();
+      chatWindowRef.value?.scrollToMessage?.(messageId);
+      return;
+    }
+  }
+
+  toast.add({
+    severity: "warn",
+    summary: "Không tìm thấy",
+    detail: "Tin nhắn có thể đã bị xóa.",
+    life: 2500,
+  });
+}
+
 // ── Direct chat ───────────────────────────────────────────────────
 async function startDirect(targetUserId: number) {
   try {
-    const res = await api.post(`/api/workspaces/${wsId()}/chat/rooms/direct`, {
-      targetUserId,
-    });
-    const room = res.data.data;
+    const room = await chatApi.openDirect(wsId(), targetUserId);
     if (!chatStore.rooms.find((r: any) => r.id === room.id))
       chatStore.prependRoom(room);
     await openRoom(room.id);
@@ -628,11 +712,7 @@ async function handleCreateGroup(payload: {
 }) {
   creatingGroup.value = true;
   try {
-    const res = await api.post(
-      `/api/workspaces/${wsId()}/chat/rooms/group`,
-      payload,
-    );
-    const room = res.data.data;
+    const room = await chatApi.createGroup(wsId(), payload);
     chatStore.prependRoom(room);
     showCreateGroup.value = false;
     await openRoom(room.id);
@@ -658,12 +738,12 @@ async function handleCreateGroup(payload: {
 async function handleRenameGroup(newName: string) {
   if (!chatStore.activeRoomId) return;
   try {
-    const res = await api.patch(
-      `/api/workspaces/${wsId()}/chat/rooms/${chatStore.activeRoomId}/name`,
-      null,
-      { params: { name: newName } },
+    const updated = await chatApi.renameGroup(
+      wsId(),
+      chatStore.activeRoomId,
+      newName,
     );
-    chatStore.updateRoom(res.data.data);
+    chatStore.updateRoom(updated);
     toast.add({ severity: "success", summary: "Đã đổi tên nhóm", life: 2000 });
   } catch (e: any) {
     toast.add({
@@ -683,13 +763,17 @@ async function handleUpdateGroupAvatar(file: File) {
     if (!uploaded?.fileUrl) {
       throw new Error("Upload failed");
     }
-    const res = await api.patch(
-      `/api/workspaces/${wsId()}/chat/rooms/${chatStore.activeRoomId}/avatar`,
-      null,
-      { params: { avatarUrl: uploaded.fileUrl } },
+    const updated = await chatApi.updateGroupAvatar(
+      wsId(),
+      chatStore.activeRoomId,
+      uploaded.fileUrl,
     );
-    chatStore.updateRoom(res.data.data);
-    toast.add({ severity: "success", summary: "Đã cập nhật ảnh nhóm", life: 2000 });
+    chatStore.updateRoom(updated);
+    toast.add({
+      severity: "success",
+      summary: "Đã cập nhật ảnh nhóm",
+      life: 2000,
+    });
   } catch (e: any) {
     toast.add({
       severity: "error",
@@ -718,11 +802,7 @@ async function handleAddMembers(userIds: number[]) {
   if (!chatStore.activeRoomId) return;
   addingMember.value = true;
   try {
-    for (const userId of userIds) {
-      await api.post(
-        `/api/workspaces/${wsId()}/chat/rooms/${chatStore.activeRoomId}/members/${userId}`,
-      );
-    }
+    await chatApi.addMembers(wsId(), chatStore.activeRoomId, userIds);
     showAddMember.value = false;
     await Promise.all([
       loadWorkspaceMembers(),
@@ -758,9 +838,7 @@ async function handleRemoveMember(targetUserId: number) {
     acceptProps: { severity: "danger" },
     accept: async () => {
       try {
-        await api.delete(
-          `/api/workspaces/${wsId()}/chat/rooms/${snap}/members/${targetUserId}`,
-        );
+        await chatApi.removeMember(wsId(), snap, targetUserId);
         await loadGroupMembers(snap);
         toast.add({
           severity: "success",
@@ -792,7 +870,7 @@ async function handleLeaveRoom() {
     accept: async () => {
       leavingRoom.value = true;
       try {
-        await api.post(`/api/workspaces/${wsId()}/chat/rooms/${snap}/leave`);
+        await chatApi.leaveRoom(wsId(), snap);
         showGroupInfo.value = false;
         chatStore.removeRoom(snap);
         toast.add({ severity: "info", summary: "Đã rời nhóm", life: 2000 });
@@ -823,7 +901,7 @@ async function handleDeleteRoom() {
     acceptProps: { severity: "danger" },
     accept: async () => {
       try {
-        await api.delete(`/api/workspaces/${wsId()}/chat/rooms/${snap}`);
+        await chatApi.deleteRoom(wsId(), snap);
         showGroupInfo.value = false;
         chatStore.removeRoom(snap);
         toast.add({ severity: "success", summary: "Đã xóa nhóm", life: 2000 });

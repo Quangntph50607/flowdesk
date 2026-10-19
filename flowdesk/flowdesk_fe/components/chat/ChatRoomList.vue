@@ -21,7 +21,8 @@
         style="background: #f1f3f4"
       >
         <i
-          class="pi pi-search shrink-0"
+          class="pi shrink-0"
+          :class="searching ? 'pi-spin pi-spinner' : 'pi-search'"
           style="color: #94a3b8; font-size: 12px"
         />
         <input
@@ -30,6 +31,14 @@
           class="flex-1 border-none outline-none bg-transparent text-[13px] placeholder:text-slate-400"
           style="color: #0f172a"
         />
+        <button
+          v-if="search"
+          class="shrink-0 text-slate-400 hover:text-slate-600"
+          aria-label="Xóa tìm kiếm"
+          @click="search = ''"
+        >
+          <i class="pi pi-times text-[11px]" />
+        </button>
       </div>
     </div>
 
@@ -163,12 +172,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import Menu from "primevue/menu";
 import type { ChatRoom } from "~/types/chat";
 import { formatChatTime } from "~/utils/chatFormat";
 
-const props = defineProps<{ rooms: ChatRoom[] }>();
+const props = defineProps<{
+  rooms: ChatRoom[];
+  /** Đang gọi API search (hiển thị loading). */
+  searching?: boolean;
+}>();
 
 const emit = defineEmits<{
   (e: "selectRoom", id: number): void;
@@ -176,6 +189,8 @@ const emit = defineEmits<{
   (e: "openCreateGroup"): void;
   (e: "togglePin", id: number): void;
   (e: "toggleMute", id: number): void;
+  /** Tìm conversation theo từ khóa (gọi backend). Truyền rỗng để clear. */
+  (e: "search", keyword: string): void;
 }>();
 
 const chatStore = useChatStore();
@@ -183,6 +198,15 @@ const search = ref("");
 const activeTab = ref<"chat" | "group">("chat");
 const roomMenu = ref();
 const selectedRoom = ref<ChatRoom | null>(null);
+
+// Debounce search 300ms rồi emit cho parent gọi API
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+watch(search, (val) => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    emit("search", val.trim());
+  }, 300);
+});
 
 function formatLastMessage(msg: string | null | undefined): string {
   if (!msg) return "Chưa có tin nhắn";
@@ -203,7 +227,9 @@ const roomMenuItems = computed(() => {
   return [
     {
       label: room.isPinned ? "Bỏ ghim" : "Ghim",
-      icon: room.isPinned ? "fa-solid fa-thumbtack-slash" : "fa-solid fa-thumbtack",
+      icon: room.isPinned
+        ? "fa-solid fa-thumbtack-slash"
+        : "fa-solid fa-thumbtack",
       command: () => emit("togglePin", room.id),
     },
     {
@@ -219,12 +245,11 @@ function toggleRoomMenu(event: Event, room: ChatRoom) {
   roomMenu.value?.toggle(event);
 }
 
+// Hiển thị theo tab (chat = tất cả, group = chỉ GROUP).
+// Việc filter theo keyword đã làm ở backend qua API searchRooms.
 const filteredRooms = computed(() => {
-  let list = props.rooms;
   if (activeTab.value === "group")
-    list = list.filter((r) => r.type === "GROUP");
-  if (!search.value.trim()) return list;
-  const q = search.value.toLowerCase();
-  return list.filter((r) => r.name?.toLowerCase().includes(q));
+    return props.rooms.filter((r) => r.type === "GROUP");
+  return props.rooms;
 });
 </script>
