@@ -10,6 +10,7 @@ export interface ChatRoom {
   avatarUrl?: string | null;
   description?: string | null;
   lastMessage: string | null;
+  lastMessageSenderName?: string | null;
   lastMessageAt: string | null;
   unreadCount: number;
   isOwner: boolean;
@@ -19,6 +20,40 @@ export interface ChatRoom {
   owner?: boolean;
   pinned?: boolean;
   memberCount?: number;
+}
+
+/** Trạng thái đang nhập của 1 user trong 1 room. */
+export interface TypingState {
+  roomId: number;
+  userEmail: string;
+  userName: string;
+  typing: boolean;
+}
+
+/** Thông tin ai đã xem. */
+export interface ReadReceipt {
+  userId: number;
+  fullName: string;
+  avatarInitial: string;
+  avatarUrl?: string | null;
+  lastReadAt: string;
+}
+
+/** Các loại WS event từ BE (ngoài ChatMessage thông thường). */
+export type WsEventType =
+  | "TYPING"
+  | "READ_RECEIPT"
+  | "MEMBER_ADDED"
+  | "MEMBER_REMOVED"
+  | "MEMBER_LEFT"
+  | "ROOM_RENAMED"
+  | "AVATAR_UPDATED"
+  | "ROOM_DELETED";
+
+export interface WsEvent {
+  eventType: WsEventType;
+  roomId: number;
+  [key: string]: any;
 }
 
 export interface ChatMessage {

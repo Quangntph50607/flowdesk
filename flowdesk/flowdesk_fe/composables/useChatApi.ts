@@ -11,7 +11,12 @@
  *
  * Mọi function đều throw error khi backend trả lỗi, để caller tự try/catch.
  */
-import type { ChatMessage, ChatLinkItem, ChatRoom } from "~/types/chat";
+import type {
+  ChatMessage,
+  ChatLinkItem,
+  ChatRoom,
+  ReadReceipt,
+} from "~/types/chat";
 
 /** Payload tạo group mới. */
 export interface CreateGroupPayload {
@@ -299,6 +304,17 @@ export const useChatApi = () => {
     await api.delete(buildPath(workspaceId, `/rooms/${roomId}`));
   }
 
+  /** Lấy danh sách thành viên đã xem room, kèm thời điểm đọc cuối. */
+  async function getReadReceipts(
+    workspaceId: number,
+    roomId: number,
+  ): Promise<ReadReceipt[]> {
+    const res = await api.get(
+      buildPath(workspaceId, `/rooms/${roomId}/read-receipts`),
+    );
+    return unwrap(res);
+  }
+
   return {
     // Rooms
     getRooms,
@@ -314,6 +330,8 @@ export const useChatApi = () => {
     // Pin / Mute
     togglePin,
     toggleMute,
+    // Read receipts
+    getReadReceipts,
     // Group management
     renameGroup,
     updateGroupAvatar,

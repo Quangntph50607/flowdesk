@@ -4,6 +4,7 @@ import com.example.flowdesk_be.dto.request.CreateGroupRequest;
 import com.example.flowdesk_be.dto.request.OpenDirectRequest;
 import com.example.flowdesk_be.dto.response.GroupMemberResponse;
 import com.example.flowdesk_be.dto.response.MessageResponse;
+import com.example.flowdesk_be.dto.response.ReadReceiptResponse;
 import com.example.flowdesk_be.dto.response.RoomResponse;
 import com.example.flowdesk_be.entity.*;
 import com.example.flowdesk_be.exception.AppException;
@@ -154,6 +155,11 @@ public class ChatServiceImpl implements ChatService {
         .description(room.getDescription())
         .lastMessage(last == null ? null
             : (last.getIsRecalled() ? "Tin nhắn đã được thu hồi" : last.getContent()))
+        .lastMessageSenderName(
+            last == null ? null
+                : ("GROUP".equals(room.getType()) && !last.getIsRecalled()
+                    ? last.getSender() == null ? null : last.getSender().getFullName()
+                    : null))
         .lastMessageAt(last == null ? room.getCreatedAt() : last.getCreatedAt())
         .unreadCount((int) unread)
         .isOwner(Boolean.TRUE.equals(membership.getIsOwner()))
@@ -446,6 +452,29 @@ public class ChatServiceImpl implements ChatService {
     ChatRoomMember membership = assertActiveMember(roomId, me.getId());
     membership.setLastReadAt(LocalDateTime.now());
     memberRepo.save(membership);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<ReadReceiptResponse> getReadReceipts(Long roomId, String email) {
+    User me = findUser(email);
+    assertActiveMember(roomId, me.getId());
+
+    return memberRepo.findByRoomIdAndIsActiveTrue(roomId).stream()
+        .filter(m -> m.getLastReadAt() != null)
+        .map(m -> {
+          String fullName = m.getUser().getFullName();
+          return ReadReceiptResponse.builder()
+              .userId(m.getUser().getId())
+              .fullName(fullName)
+              .avatarInitial(fullName != null && !fullName.isEmpty()
+                  ? String.valueOf(fullName.charAt(0)).toUpperCase()
+                  : "?")
+              .avatarUrl(resolveSharedFileUrl(m.getUser().getAvatarUrl()))
+              .lastReadAt(m.getLastReadAt())
+              .build();
+        })
+        .toList();
   }
 
   @Override

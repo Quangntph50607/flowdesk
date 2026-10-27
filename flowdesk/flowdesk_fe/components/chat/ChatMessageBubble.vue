@@ -13,7 +13,7 @@
     <!-- Normal message -->
     <div
       v-else
-      class="group/message flex items-end gap-2 px-4"
+      class="group/message flex items-end gap-2 px-1"
       :class="[
         isMine ? 'flex-row-reverse' : 'flex-row',
         isLastInGroup ? 'mb-0.5' : 'mb-[2px]',
@@ -256,6 +256,27 @@
             </div>
             <p class="text-sm">{{ message.content }}</p>
           </div>
+          <div
+            v-if="isMine && isLastInGroup && readReceipts?.length"
+            class="absolute bottom-[-40px] right-0 z-20 flex gap-0.5 py-1"
+            :aria-label="`Đã xem bởi ${readReceipts.map((r) => r.fullName).join(', ')}`"
+            title="Đã xem"
+          >
+            <div
+              v-for="receipt in readReceipts.slice(0, 5)"
+              :key="receipt.userId"
+              class="flex h-[18px] w-[18px] items-center justify-center overflow-hidden rounded-full border border-white bg-slate-400 text-[8px] text-white"
+              :title="receipt.fullName"
+            >
+              <img
+                v-if="receipt.avatarUrl"
+                :src="receipt.avatarUrl"
+                :alt="receipt.fullName"
+                class="h-full w-full object-cover"
+              />
+              <span v-else>{{ receipt.avatarInitial }}</span>
+            </div>
+          </div>
         </div>
 
         <!-- Timestamp — chỉ hiện ở bubble cuối group -->
@@ -297,7 +318,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from "vue";
-import type { ChatMessage } from "../../types/chat";
+import type { ChatMessage, ReadReceipt } from "../../types/chat";
 import { formatMessageTime } from "../../utils/chatFormat";
 
 const props = defineProps<{
@@ -307,6 +328,7 @@ const props = defineProps<{
   isFirstInGroup?: boolean;
   isLastInGroup?: boolean;
   highlighted?: boolean;
+  readReceipts?: ReadReceipt[];
 }>();
 
 const emit = defineEmits<{

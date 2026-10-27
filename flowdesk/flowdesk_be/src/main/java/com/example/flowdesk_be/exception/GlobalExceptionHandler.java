@@ -3,6 +3,7 @@ package com.example.flowdesk_be.exception;
 import com.example.flowdesk_be.dto.response.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -12,6 +13,13 @@ import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+  @ExceptionHandler(BadCredentialsException.class)
+  public ResponseEntity<ApiResponse<Void>> handleBadCredentials(BadCredentialsException ex) {
+    return ResponseEntity
+        .status(HttpStatus.UNAUTHORIZED)
+        .body(ApiResponse.error(401, "Email hoặc mật khẩu không đúng"));
+  }
 
   // Lỗi nghiệp vụ (AppException)
   @ExceptionHandler(AppException.class)

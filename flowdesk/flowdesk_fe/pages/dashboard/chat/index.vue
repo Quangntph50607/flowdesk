@@ -144,6 +144,9 @@
             :info-open="showGroupInfo"
             :search-results="messageSearchResults"
             :searching-messages="searchingMessages"
+            :typing-users="activeTypingUsers"
+            :read-receipts="activeReadReceipts"
+            :is-online="activeDirectOnline"
             @send="handleSend"
             @send-file="handleSendFile"
             @edit-message="handleEditMessage"
@@ -152,6 +155,7 @@
             @toggle-info="handleToggleInfo"
             @search-messages="handleSearchMessages"
             @jump-to-search-result="handleJumpToSearchResult"
+            @typing="handleTyping"
           />
         </div>
 
@@ -224,6 +228,9 @@ import type {
   ChatLinkItem,
   ChatMessage,
   WorkspaceMember,
+  TypingState,
+  ReadReceipt,
+  WsEvent,
 } from "../../../types/chat";
 
 // Type cho ref của ChatWindow
@@ -248,6 +255,9 @@ const {
   subscribeRoom,
   sendWsMessage,
   sendWsFile,
+  sendWsTyping,
+  subscribePresence,
+  sendHeartbeat,
   isConnected,
 } = useChat();
 const { uploadAvatar } = useFileUpload();
@@ -343,8 +353,12 @@ async function enterWorkspace(workspaceId: number) {
 
   connect(() => {
     chatStore.rooms.forEach((r: any) => subscribeRoom(r.id, onRealtimeMessage));
+    subscribePresence(onPresenceEvent);
+    sendHeartbeat();
   });
 
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = setInterval(sendHeartbeat, 20000);
   loading.value = false;
 }
 
@@ -354,6 +368,25 @@ const currentUserId = computed(() => authStore.currentUser?.id ?? 0);
 const activeRoomMessages = computed(() => {
   if (!chatStore.activeRoomId) return [];
   return chatStore.roomMessages(chatStore.activeRoomId);
+});
+
+const onlineEmails = ref<Set<string>>(new Set());
+const activeDirectOnline = computed(() => {
+  if (chatStore.activeRoom?.type !== "DIRECT") return false;
+  const other = groupMembers.value.find((m) => m.userId !== currentUserId.value);
+  return !!other?.email && onlineEmails.value.has(other.email);
+});
+
+/** Danh sách người đang nhập trong room hiện tại (không phải mình). */
+const activeTypingUsers = computed(() => {
+  if (!chatStore.activeRoomId) return [];
+  return typingStates.value.get(chatStore.activeRoomId) ?? [];
+});
+
+/** Read receipts của room hiện tại. */
+const activeReadReceipts = computed(() => {
+  if (!chatStore.activeRoomId) return [];
+  return readReceipts.value.get(chatStore.activeRoomId) ?? [];
 });
 
 const membersNotInGroup = computed<WorkspaceMember[]>(() => {
@@ -378,6 +411,16 @@ const showAddMember = ref(false);
 const searchingRooms = ref(false);
 const searchingMessages = ref(false);
 const messageSearchResults = ref<ChatMessage[]>([]);
+
+// ── Typing state ──────────────────────────────────────────────────
+// Map roomId → danh sách user đang nhập
+const typingStates = ref<Map<number, TypingState[]>>(new Map());
+const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+// ── Read receipts ─────────────────────────────────────────────────
+// Map roomId → danh sách read receipts
+const readReceipts = ref<Map<number, ReadReceipt[]>>(new Map());
 
 const workspaceMembers = ref<WorkspaceMember[]>([]);
 const groupMembers = ref<
@@ -418,7 +461,7 @@ async function loadRooms() {
 async function loadWorkspaceMembers() {
   try {
     const res = await api.get(`/api/workspaces/${wsId()}/all-members`, {
-      params: { limit: 20, page: 1 },
+      params: { limit: 200, page: 1 },
     });
     workspaceMembers.value = getPageItems(res.data.data).map((m: any) => ({
       userId: m.userId,
@@ -483,6 +526,7 @@ async function openRoom(roomId: number) {
   if (!chatStore.messages[roomId]) await loadMessages(roomId, 0, true);
 
   await loadGroupMembers(roomId);
+  await loadReadReceipts(roomId);
 
   try {
     await chatApi.markRead(wsId(), roomId);
@@ -535,6 +579,15 @@ async function handleLoadMore() {
 function handleSend(content: string, replyToMessageId?: number | null) {
   if (!chatStore.activeRoomId) return;
   sendWsMessage(chatStore.activeRoomId, content, replyToMessageId);
+}
+
+function handleTyping(typing: boolean) {
+  if (!chatStore.activeRoomId || !authStore.currentUser) return;
+  sendWsTyping(
+    chatStore.activeRoomId,
+    authStore.currentUser.fullName ?? authStore.currentUser.email,
+    typing,
+  );
 }
 
 function handleSendFile(
@@ -600,7 +653,122 @@ async function handleToggleInfo() {
   }
 }
 
+async function loadReadReceipts(roomId: number) {
+  try {
+    const receipts = await chatApi.getReadReceipts(wsId(), roomId);
+    readReceipts.value = new Map(readReceipts.value).set(roomId, receipts);
+  } catch {
+    /* non-critical */
+  }
+}
+
+function handleTypingEvent(event: WsEvent) {
+  const roomId = event.roomId as number;
+  const userEmail = event.userEmail as string;
+  const userName = event.userName as string;
+  const typing = event.typing as boolean;
+
+  const key = `${roomId}-${userEmail}`;
+
+  // Clear timer cũ
+  if (typingTimers.has(key)) {
+    clearTimeout(typingTimers.get(key)!);
+    typingTimers.delete(key);
+  }
+
+  const current = typingStates.value.get(roomId) ?? [];
+
+  if (typing) {
+    const updated = [
+      ...current.filter((t) => t.userEmail !== userEmail),
+      { roomId, userEmail, userName, typing: true },
+    ];
+    typingStates.value = new Map(typingStates.value).set(roomId, updated);
+
+    // Tự xóa sau 4s nếu không có update mới
+    const timer = setTimeout(() => {
+      const list = typingStates.value.get(roomId) ?? [];
+      typingStates.value = new Map(typingStates.value).set(
+        roomId,
+        list.filter((t) => t.userEmail !== userEmail),
+      );
+      typingTimers.delete(key);
+    }, 4000);
+    typingTimers.set(key, timer);
+  } else {
+    typingStates.value = new Map(typingStates.value).set(
+      roomId,
+      current.filter((t) => t.userEmail !== userEmail),
+    );
+  }
+}
+
+function onPresenceEvent(event: any) {
+  if (event?.eventType !== "PRESENCE" || !event.email) return;
+  const next = new Set(onlineEmails.value);
+  if (event.online) next.add(event.email);
+  else next.delete(event.email);
+  onlineEmails.value = next;
+}
+
 function onRealtimeMessage(msg: any) {
+  // Phân loại event — có eventType thì là system event, không có là ChatMessage
+  if (msg.eventType) {
+    const event = msg as WsEvent;
+    switch (event.eventType) {
+      case "TYPING":
+        // Không hiện typing của chính mình
+        if (event.userEmail !== authStore.currentUser?.email) {
+          handleTypingEvent(event);
+        }
+        break;
+
+      case "READ_RECEIPT":
+        if (event.receipts) {
+          readReceipts.value = new Map(readReceipts.value).set(
+            event.roomId,
+            event.receipts as ReadReceipt[],
+          );
+        }
+        break;
+
+      case "MEMBER_ADDED":
+      case "MEMBER_REMOVED":
+      case "MEMBER_LEFT":
+        if (event.eventType === "MEMBER_REMOVED" && event.targetUserId === currentUserId.value) {
+          chatStore.removeRoom(event.roomId);
+          if (chatStore.activeRoomId === event.roomId) chatStore.setActiveRoom(null);
+        }
+        // Reload member list nếu đang mở panel
+        if (showGroupInfo.value && chatStore.activeRoomId === event.roomId) {
+          loadGroupMembers(event.roomId);
+        }
+        // Reload rooms để cập nhật sidebar
+        loadRooms();
+        break;
+
+      case "ROOM_RENAMED":
+        {
+          const room = chatStore.rooms.find((r) => r.id === event.roomId);
+          if (room) chatStore.updateRoom({ ...room, name: event.name });
+        }
+        break;
+
+      case "AVATAR_UPDATED":
+        loadRooms();
+        break;
+
+      case "ROOM_DELETED":
+        chatStore.removeRoom(event.roomId);
+        if (chatStore.activeRoomId === event.roomId) {
+          showGroupInfo.value = false;
+        }
+        break;
+    }
+    return;
+  }
+
+  // Normal message
   chatStore.appendMessage(msg);
   if (msg.roomId === chatStore.activeRoomId) {
     nextTick(() => chatWindowRef.value?.scrollToBottom(true));
@@ -924,6 +1092,10 @@ onMounted(async () => {
 
 onUnmounted(() => {
   disconnect();
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
   chatStore.setActiveRoom(null);
+  // Cleanup typing timers
+  typingTimers.forEach((t) => clearTimeout(t));
+  typingTimers.clear();
 });
 </script>
