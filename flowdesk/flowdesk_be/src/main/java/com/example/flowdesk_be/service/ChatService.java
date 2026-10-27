@@ -2,6 +2,7 @@ package com.example.flowdesk_be.service;
 
 import com.example.flowdesk_be.dto.request.CreateGroupRequest;
 import com.example.flowdesk_be.dto.request.OpenDirectRequest;
+import com.example.flowdesk_be.dto.response.ReadReceiptResponse;
 import com.example.flowdesk_be.dto.response.MessageResponse;
 import com.example.flowdesk_be.dto.response.RoomResponse;
 import org.springframework.data.domain.Page;
@@ -29,6 +30,9 @@ public interface ChatService {
   MessageResponse recallMessage(Long roomId, Long messageId, String email);
 
   void markRead(Long roomId, String email);
+
+  /** Trả về danh sách member đã đọc room, kèm thời điểm đọc cuối. */
+  List<ReadReceiptResponse> getReadReceipts(Long roomId, String email);
 
   RoomResponse togglePin(Long roomId, String email);
 

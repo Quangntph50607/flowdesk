@@ -20,7 +20,9 @@
             {{ room.avatarInitial }}
           </div>
           <span
-            class="absolute bottom-0 right-0 w-[11px] h-[11px] rounded-full bg-green-400 border-2 border-white"
+            v-if="room.type === 'DIRECT'"
+            class="absolute bottom-0 right-0 w-[11px] h-[11px] rounded-full border-2 border-white"
+            :class="isOnline ? 'bg-green-400' : 'bg-slate-300'"
           />
         </div>
         <div class="min-w-0">
@@ -33,7 +35,7 @@
             {{
               room.type === "GROUP"
                 ? `${room.memberCount ?? ""} thành viên`
-                : "Đang hoạt động"
+                : isOnline ? "Đang hoạt động" : "Ngoại tuyến"
             }}
           </p>
         </div>
@@ -41,7 +43,7 @@
 
       <!-- Header actions -->
       <div class="flex items-center gap-0.5 shrink-0">
-        <button
+        <!-- <button
           class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
         >
           <i class="pi pi-phone text-[14px]" />
@@ -50,7 +52,7 @@
           class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
         >
           <i class="pi pi-video text-[14px]" />
-        </button>
+        </button> -->
         <button
           class="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
           :class="
@@ -182,6 +184,7 @@
           :show-sender-name="room.type === 'GROUP'"
           :is-first-in-group="item.isFirst"
           :is-last-in-group="item.isLast"
+          :read-receipts="item.msg.id === messages[messages.length - 1]?.id ? lastMessageReadBy : []"
           :highlighted="highlightedMessageId === item.msg.id"
           @reply="startReply"
           @edit="startEdit"
@@ -314,6 +317,12 @@
       </div>
     </Transition>
 
+    <div
+      v-if="typingLabel"
+      class="shrink-0 bg-white px-2 py-1 text-[11px] text-slate-400"
+    >
+      {{ typingLabel }}
+    </div>
     <!-- ── Input bar ────────────────────────────────────────────────── -->
     <div
       class="flex items-center gap-2 px-4 py-3 bg-white border-t border-slate-100 shrink-0"
@@ -357,6 +366,7 @@
           class="w-full py-2 px-4 rounded-2xl outline-none text-sm text-slate-800 placeholder:text-slate-400 disabled:opacity-40"
           style="background: #f1f3f4; border: none"
           @keydown.enter.prevent="handleSend"
+          @input="onInputChange"
         />
       </div>
 
@@ -379,8 +389,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick } from "vue";
-import type { ChatRoom, ChatMessage } from "~/types/chat";
+import { ref, computed, nextTick, watch, onUnmounted } from "vue";
+import type {
+  ChatRoom,
+  ChatMessage,
+  TypingState,
+  ReadReceipt,
+} from "~/types/chat";
 import { useFileUpload } from "~/composables/useFileUpload";
 import { formatChatTime } from "~/utils/chatFormat";
 
@@ -390,10 +405,13 @@ const props = defineProps<{
   currentUserId: number;
   loadingMore: boolean;
   infoOpen?: boolean;
-  /** Kết quả tìm tin nhắn (từ API searchMessages). */
   searchResults?: ChatMessage[];
-  /** Đang gọi API search message. */
   searchingMessages?: boolean;
+  /** Danh sách user đang nhập trong room này. */
+  typingUsers?: TypingState[];
+  /** Read receipts của room này. */
+  readReceipts?: ReadReceipt[];
+  isOnline?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -410,13 +428,14 @@ const emit = defineEmits<{
   (e: "recallMessage", messageId: number): void;
   (e: "loadMore"): void;
   (e: "toggleInfo"): void;
-  /** Tìm tin nhắn trong conversation. Parent gọi API và trả kết quả qua prop. */
   (e: "searchMessages", keyword: string): void;
-  /** Click vào 1 kết quả search → parent load page chứa message rồi scroll tới. */
   (e: "jumpToSearchResult", messageId: number): void;
+  /** Emit khi user bắt đầu/dừng nhập. */
+  (e: "typing", isTyping: boolean): void;
 }>();
 
 const inputText = ref("");
+const searchOpen = ref(false);
 const replyTarget = ref<ChatMessage | null>(null);
 const editingMessage = ref<ChatMessage | null>(null);
 const highlightedMessageId = ref<number | null>(null);
@@ -424,8 +443,61 @@ const messagesContainerRef = ref<HTMLElement | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const toast = useAppToast();
 
-// ── Search state ──────────────────────────────────────────────────
-const searchOpen = ref(false);
+// ── Typing debounce ───────────────────────────────────────────────
+let typingTimer: ReturnType<typeof setTimeout> | null = null;
+let isCurrentlyTyping = false;
+
+function onInputChange() {
+  if (!isCurrentlyTyping) {
+    isCurrentlyTyping = true;
+    emit("typing", true);
+  }
+  if (typingTimer) clearTimeout(typingTimer);
+  typingTimer = setTimeout(() => {
+    isCurrentlyTyping = false;
+    emit("typing", false);
+    typingTimer = null;
+  }, 2500);
+}
+
+// Khi gửi tin → dừng typing ngay
+function stopTyping() {
+  if (typingTimer) {
+    clearTimeout(typingTimer);
+    typingTimer = null;
+  }
+  if (isCurrentlyTyping) {
+    isCurrentlyTyping = false;
+    emit("typing", false);
+  }
+}
+
+// ── Typing label ──────────────────────────────────────────────────
+const typingLabel = computed(() => {
+  const users = props.typingUsers ?? [];
+  if (users.length === 0) return "";
+  if (users.length === 1) return `${users[0].userName} đang nhập...`;
+  if (users.length === 2)
+    return `${users[0].userName} và ${users[1].userName} đang nhập...`;
+  return "Nhiều người đang nhập...";
+});
+
+// ── Read receipts — lấy avatar của người đã xem tin nhắn cuối ────
+const lastMessageReadBy = computed(() => {
+  const receipts = props.readReceipts ?? [];
+  const msgs = props.messages;
+  if (!msgs.length || !receipts.length) return [];
+  const lastMsg = msgs[msgs.length - 1];
+  // Những người đã đọc đến sau thời điểm tin nhắn cuối (không phải người gửi)
+  return receipts
+    .filter(
+      (r) => r.userId !== lastMsg.senderId && r.lastReadAt >= lastMsg.createdAt,
+    )
+    .slice(0, 5); // hiện tối đa 5 avatar
+});
+function isMine(message: ChatMessage) {
+  return message.senderId === props.currentUserId;
+}
 const searchKeyword = ref("");
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -560,6 +632,7 @@ const { uploading, uploadProgress, uploadChatFile } = useFileUpload();
 function handleSend() {
   const content = inputText.value.trim();
   if (!content) return;
+  stopTyping();
   if (editingMessage.value) {
     emit("editMessage", editingMessage.value.id, content);
     inputText.value = "";
@@ -570,6 +643,11 @@ function handleSend() {
   inputText.value = "";
   replyTarget.value = null;
 }
+
+onUnmounted(() => {
+  stopTyping();
+  if (typingTimer) clearTimeout(typingTimer);
+});
 
 function startReply(message: ChatMessage) {
   editingMessage.value = null;

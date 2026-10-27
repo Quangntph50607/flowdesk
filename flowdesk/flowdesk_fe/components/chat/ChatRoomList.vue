@@ -146,13 +146,13 @@
               "
               style="max-width: 150px"
             >
-              {{ formatLastMessage(room.lastMessage) }}
+              {{ room.lastMessageSenderName ? `${room.lastMessageSenderName}: ` : "" }}{{ formatLastMessage(room.lastMessage) }}
             </span>
             <Badge
               v-if="room.unreadCount > 0"
               :value="String(room.unreadCount > 99 ? '99+' : room.unreadCount)"
               :severity="room.isMuted ? 'secondary' : 'danger'"
-              class="shrink-0"
+              class="shrink-0 !rounded-full"
               style="font-size: 10px; min-width: 18px; height: 18px"
             />
           </div>

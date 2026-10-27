@@ -8,19 +8,20 @@ import java.time.LocalDateTime;
 @Getter
 @Builder
 public class RoomResponse {
-    private Long id;
-    private String type;           // "DIRECT" | "GROUP"
-    private String name;           // tên group, hoặc fullName của người kia (DIRECT)
-    private String avatarInitial;  // ký tự đầu để hiển thị avatar
-    private String avatarUrl;
-    private String description;
-    private String lastMessage;
-    private LocalDateTime lastMessageAt;
-    private int unreadCount;
-    private boolean isOwner;       // current user có phải owner không (GROUP)
-    @JsonProperty("isMuted")
-    private boolean isMuted;
+  private Long id;
+  private String type; // "DIRECT" | "GROUP"
+  private String name; // tên group, hoặc fullName của người kia (DIRECT)
+  private String avatarInitial; // ký tự đầu để hiển thị avatar
+  private String avatarUrl;
+  private String description;
+  private String lastMessage;
+  private String lastMessageSenderName; // tên người gửi tin cuối (GROUP)
+  private LocalDateTime lastMessageAt;
+  private int unreadCount;
+  private boolean isOwner; // current user có phải owner không (GROUP)
+  @JsonProperty("isMuted")
+  private boolean isMuted;
 
-    @JsonProperty("isPinned")
-    private boolean isPinned;
+  @JsonProperty("isPinned")
+  private boolean isPinned;
 }

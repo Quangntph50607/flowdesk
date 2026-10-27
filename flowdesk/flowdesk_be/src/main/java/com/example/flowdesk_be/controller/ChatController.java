@@ -90,7 +90,20 @@ public class ChatController {
       @PathVariable Long roomId,
       @AuthenticationPrincipal UserDetails ud) {
     chatService.markRead(roomId, ud.getUsername());
+    // Broadcast read-receipt event cho các member trong room
+    messagingTemplate.convertAndSend("/topic/room/" + roomId,
+        (Object) Map.of("eventType", "READ_RECEIPT", "roomId", roomId,
+            "receipts", chatService.getReadReceipts(roomId, ud.getUsername())));
     return ResponseEntity.ok(ApiResponse.success(200, "OK", null));
+  }
+
+  @GetMapping("/rooms/{roomId}/read-receipts")
+  public ResponseEntity<ApiResponse<List<ReadReceiptResponse>>> getReadReceipts(
+      @PathVariable Long workspaceId,
+      @PathVariable Long roomId,
+      @AuthenticationPrincipal UserDetails ud) {
+    return ResponseEntity.ok(ApiResponse.success(200, "OK",
+        chatService.getReadReceipts(roomId, ud.getUsername())));
   }
 
   @PatchMapping("/rooms/{roomId}/pin")
@@ -141,6 +154,8 @@ public class ChatController {
       @PathVariable Long targetUserId,
       @AuthenticationPrincipal UserDetails ud) {
     chatService.addMember(roomId, targetUserId, ud.getUsername());
+    messagingTemplate.convertAndSend("/topic/room/" + roomId,
+        (Object) Map.of("eventType", "MEMBER_ADDED", "roomId", roomId, "targetUserId", targetUserId));
     return ResponseEntity.ok(ApiResponse.success(200, "Thêm thành viên thành công", null));
   }
 
@@ -151,6 +166,8 @@ public class ChatController {
       @PathVariable Long targetUserId,
       @AuthenticationPrincipal UserDetails ud) {
     chatService.removeMember(roomId, targetUserId, ud.getUsername());
+    messagingTemplate.convertAndSend("/topic/room/" + roomId,
+        (Object) Map.of("eventType", "MEMBER_REMOVED", "roomId", roomId, "targetUserId", targetUserId));
     return ResponseEntity.ok(ApiResponse.success(200, "Đã xóa thành viên", null));
   }
 
@@ -160,6 +177,8 @@ public class ChatController {
       @PathVariable Long roomId,
       @AuthenticationPrincipal UserDetails ud) {
     chatService.leaveRoom(roomId, ud.getUsername());
+    messagingTemplate.convertAndSend("/topic/room/" + roomId,
+        (Object) Map.of("eventType", "MEMBER_LEFT", "roomId", roomId));
     return ResponseEntity.ok(ApiResponse.success(200, "Đã rời nhóm", null));
   }
 
@@ -169,8 +188,10 @@ public class ChatController {
       @PathVariable Long roomId,
       @RequestParam String name,
       @AuthenticationPrincipal UserDetails ud) {
-    return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        chatService.renameGroup(roomId, name, ud.getUsername())));
+    RoomResponse updated = chatService.renameGroup(roomId, name, ud.getUsername());
+    messagingTemplate.convertAndSend("/topic/room/" + roomId,
+        (Object) Map.of("eventType", "ROOM_RENAMED", "roomId", roomId, "name", name));
+    return ResponseEntity.ok(ApiResponse.success(200, "OK", updated));
   }
 
   @PatchMapping("/rooms/{roomId}/avatar")
@@ -179,8 +200,10 @@ public class ChatController {
       @PathVariable Long roomId,
       @RequestParam(required = false) String avatarUrl,
       @AuthenticationPrincipal UserDetails ud) {
-    return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        chatService.updateGroupAvatar(roomId, avatarUrl, ud.getUsername())));
+    RoomResponse updated = chatService.updateGroupAvatar(roomId, avatarUrl, ud.getUsername());
+    messagingTemplate.convertAndSend("/topic/room/" + roomId,
+        (Object) Map.of("eventType", "AVATAR_UPDATED", "roomId", roomId));
+    return ResponseEntity.ok(ApiResponse.success(200, "OK", updated));
   }
 
   @GetMapping("/rooms/{roomId}/members")
@@ -198,6 +221,8 @@ public class ChatController {
       @PathVariable Long roomId,
       @AuthenticationPrincipal UserDetails ud) {
     chatService.deleteRoom(roomId, ud.getUsername());
+    messagingTemplate.convertAndSend("/topic/room/" + roomId,
+        (Object) Map.of("eventType", "ROOM_DELETED", "roomId", roomId));
     return ResponseEntity.ok(ApiResponse.success(200, "Đã xóa nhóm", null));
   }
 }

@@ -103,6 +103,26 @@ export const useChat = () => {
     });
   }
 
+  function sendWsTyping(roomId: number, userName: string, typing: boolean) {
+    if (!client?.connected) return;
+    client.publish({
+      destination: `/app/chat/${roomId}/typing`,
+      body: JSON.stringify({ typing, userName }),
+    });
+  }
+
+  function subscribePresence(onEvent: (event: any) => void) {
+    if (!client?.connected || subscriptions.has("presence")) return;
+    subscriptions.set("presence", client.subscribe("/topic/presence", (frame) => {
+      try { onEvent(JSON.parse(frame.body)); } catch { /* ignore malformed event */ }
+    }));
+  }
+
+  function sendHeartbeat() {
+    if (!client?.connected) return;
+    client.publish({ destination: "/app/presence/heartbeat", body: "{}" });
+  }
+
   function isConnected(): boolean {
     return client?.connected ?? false;
   }
@@ -114,6 +134,9 @@ export const useChat = () => {
     unsubscribeRoom,
     sendWsMessage,
     sendWsFile,
+    sendWsTyping,
+    subscribePresence,
+    sendHeartbeat,
     isConnected,
   };
 };
