@@ -2,11 +2,13 @@ package com.example.flowdesk_be.controller;
 
 import com.example.flowdesk_be.dto.request.*;
 import com.example.flowdesk_be.dto.response.*;
+import com.example.flowdesk_be.service.ChatPresenceService;
 import com.example.flowdesk_be.service.ChatService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,6 +25,7 @@ public class ChatController {
 
   private final ChatService chatService;
   private final SimpMessagingTemplate messagingTemplate;
+  private final ChatPresenceService presenceService;
 
   @GetMapping("/rooms")
   public ResponseEntity<ApiResponse<PageResponse<RoomResponse>>> getMyRooms(
@@ -31,7 +34,16 @@ public class ChatController {
       @RequestParam(defaultValue = "20") Integer limit,
       @RequestParam(defaultValue = "1") Integer page) {
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        PageResponse.fromList(chatService.getMyRooms(workspaceId, ud.getUsername()), limit, page)));
+        chatService.getMyRooms(workspaceId, ud.getUsername(), limit, page)));
+  }
+
+  /** Snapshot trạng thái online của các thành viên trong workspace. */
+  @GetMapping("/presence")
+  public ResponseEntity<ApiResponse<Map<String, Object>>> getPresence(
+      @PathVariable Long workspaceId,
+      @AuthenticationPrincipal UserDetails ud) {
+    return ResponseEntity.ok(ApiResponse.success(200, "OK",
+        presenceService.getPresenceSnapshot(workspaceId, ud.getUsername())));
   }
 
   @GetMapping("/rooms/search")
@@ -62,14 +74,14 @@ public class ChatController {
   }
 
   @GetMapping("/rooms/{roomId}/messages")
-  public ResponseEntity<ApiResponse<Page<MessageResponse>>> getMessages(
+  public ResponseEntity<ApiResponse<Slice<MessageResponse>>> getMessages(
       @PathVariable Long workspaceId,
       @PathVariable Long roomId,
-      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(required = false) Long beforeId,
       @RequestParam(defaultValue = "30") int size,
       @AuthenticationPrincipal UserDetails ud) {
     return ResponseEntity.ok(ApiResponse.success(200, "OK",
-        chatService.getMessages(roomId, page, size, ud.getUsername())));
+        chatService.getMessages(roomId, beforeId, size, ud.getUsername())));
   }
 
   @GetMapping("/rooms/{roomId}/messages/search")
@@ -190,7 +202,7 @@ public class ChatController {
       @AuthenticationPrincipal UserDetails ud) {
     RoomResponse updated = chatService.renameGroup(roomId, name, ud.getUsername());
     messagingTemplate.convertAndSend("/topic/room/" + roomId,
-        (Object) Map.of("eventType", "ROOM_RENAMED", "roomId", roomId, "name", name));
+        (Object) Map.of("eventType", "ROOM_RENAMED", "roomId", roomId, "name", updated.getName()));
     return ResponseEntity.ok(ApiResponse.success(200, "OK", updated));
   }
 

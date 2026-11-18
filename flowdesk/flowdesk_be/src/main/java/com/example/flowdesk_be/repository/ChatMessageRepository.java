@@ -21,6 +21,67 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
       @Param("roomId") Long roomId,
       Pageable pageable);
 
+  /** Tin mới nhất của room (cursor pagination — trang đầu). */
+  @Query("""
+      SELECT m FROM ChatMessage m
+      JOIN FETCH m.sender
+      WHERE m.room.id = :roomId
+      ORDER BY m.id DESC
+      """)
+  List<ChatMessage> findLatest(@Param("roomId") Long roomId, Pageable pageable);
+
+  /** Tin cũ hơn beforeId (cursor pagination — kéo lên tải thêm). */
+  @Query("""
+      SELECT m FROM ChatMessage m
+      JOIN FETCH m.sender
+      WHERE m.room.id = :roomId
+        AND m.id < :beforeId
+      ORDER BY m.id DESC
+      """)
+  List<ChatMessage> findBefore(
+      @Param("roomId") Long roomId,
+      @Param("beforeId") Long beforeId,
+      Pageable pageable);
+
+  /** Tin cuối cùng của mỗi room (1 query cho cả sidebar). */
+  @Query("""
+      SELECT m FROM ChatMessage m
+      JOIN FETCH m.sender
+      WHERE m.id IN (
+        SELECT MAX(m2.id) FROM ChatMessage m2
+        WHERE m2.room.id IN :roomIds
+        GROUP BY m2.room.id
+      )
+      """)
+  List<ChatMessage> findLastMessagesOfRooms(@Param("roomIds") List<Long> roomIds);
+
+  /** Số tin chưa đọc của user theo từng room: [roomId, count]. */
+  @Query("""
+      SELECT m.room.id, COUNT(m) FROM ChatMessage m, ChatRoomMember cm
+      WHERE cm.room.id = m.room.id
+        AND cm.user.id = :userId
+        AND m.room.id IN :roomIds
+        AND m.sender.id <> :userId
+        AND (cm.lastReadAt IS NULL OR m.createdAt > cm.lastReadAt)
+      GROUP BY m.room.id
+      """)
+  List<Object[]> countUnreadByRooms(
+      @Param("userId") Long userId,
+      @Param("roomIds") List<Long> roomIds);
+
+  /** Tổng tin chưa đọc của user (bỏ qua room đã mute / đã rời / đã xóa). */
+  @Query("""
+      SELECT COUNT(m) FROM ChatMessage m, ChatRoomMember cm
+      WHERE cm.room.id = m.room.id
+        AND cm.user.id = :userId
+        AND cm.isActive = true
+        AND cm.isMuted = false
+        AND cm.room.isActive = true
+        AND m.sender.id <> :userId
+        AND (cm.lastReadAt IS NULL OR m.createdAt > cm.lastReadAt)
+      """)
+  long countUnreadTotal(@Param("userId") Long userId);
+
   @Query("""
       SELECT m FROM ChatMessage m
       JOIN FETCH m.sender

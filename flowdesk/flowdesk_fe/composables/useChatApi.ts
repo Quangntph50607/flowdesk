@@ -79,6 +79,24 @@ export const useChatApi = () => {
     return getPageItems(unwrap(res));
   }
 
+  /** Như getRooms nhưng kèm tổng số conversation (dùng cho "tải thêm"). */
+  async function getRoomsPage(
+    workspaceId: number,
+    params: PageParams = {},
+  ): Promise<{ items: ChatRoom[]; total: number }> {
+    const res = await api.get(buildPath(workspaceId, "/rooms"), {
+      params: { limit: params.limit ?? 20, page: params.page ?? 1 },
+    });
+    const data: any = unwrap(res);
+    return { items: getPageItems(data), total: data?.total ?? 0 };
+  }
+
+  /** Tổng tin chưa đọc trên mọi workspace (không tính conversation đã mute). */
+  async function getUnreadSummary(): Promise<number> {
+    const res = await api.get("/api/chat/unread-summary");
+    return unwrap<{ total: number }>(res)?.total ?? 0;
+  }
+
   /**
    * Tìm kiếm conversation theo từ khóa (tên người trong DIRECT hoặc tên nhóm).
    * Trả về danh sách đã sort pinned trước, updatedAt DESC.
@@ -116,25 +134,23 @@ export const useChatApi = () => {
   // ── Messages ─────────────────────────────────────────────────────
 
   /**
-   * Lấy lịch sử tin nhắn trong room (phân trang, mới nhất trước).
-   * `page` 0-indexed. Mặc định size = 30.
+   * Lấy lịch sử tin nhắn trong room (cursor pagination, mới nhất trước).
+   * - beforeId không truyền → các tin mới nhất.
+   * - beforeId = id tin cũ nhất đang có → các tin cũ hơn.
+   * `last = true` nghĩa là không còn tin cũ hơn.
    */
   async function getMessages(
     workspaceId: number,
     roomId: number,
-    page: number = 0,
+    beforeId?: number | null,
     size: number = 30,
   ): Promise<{
     content: ChatMessage[];
-    totalElements: number;
-    totalPages: number;
     last: boolean;
-    first: boolean;
-    number: number;
   }> {
     const res = await api.get(
       buildPath(workspaceId, `/rooms/${roomId}/messages`),
-      { params: { page, size } },
+      { params: { size, ...(beforeId ? { beforeId } : {}) } },
     );
     return unwrap(res);
   }
@@ -315,9 +331,26 @@ export const useChatApi = () => {
     return unwrap(res);
   }
 
+  /** Snapshot online của workspace + id workspace tổng để subscribe presence. */
+  async function getPresence(
+    workspaceId: number,
+  ): Promise<{
+    rootWorkspaceId: number;
+    onlineEmails: string[];
+    lastSeen?: Record<string, string>;
+  }> {
+    const res = await api.get(buildPath(workspaceId, "/presence"));
+    return unwrap(res);
+  }
+
   return {
+    // Presence
+    getPresence,
+    // Unread
+    getUnreadSummary,
     // Rooms
     getRooms,
+    getRoomsPage,
     searchRooms,
     openDirect,
     createGroup,

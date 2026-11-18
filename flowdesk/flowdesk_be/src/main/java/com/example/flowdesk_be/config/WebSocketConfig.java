@@ -2,10 +2,13 @@ package com.example.flowdesk_be.config;
 
 import com.example.flowdesk_be.security.JwtUtil;
 import com.example.flowdesk_be.security.UserDetailsServiceImpl;
+import com.example.flowdesk_be.service.ChatAccessGuard;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageDeliveryException;
+import java.security.Principal;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -24,11 +27,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JwtUtil jwtUtil;
     private final UserDetailsServiceImpl userDetailsService;
+    private final ChatAccessGuard accessGuard;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic");
+        registry.enableSimpleBroker("/topic", "/queue");
         registry.setApplicationDestinationPrefixes("/app");
+        registry.setUserDestinationPrefix("/user");
     }
 
     @Override
@@ -45,7 +50,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             public Message<?> preSend(Message<?> message, MessageChannel channel) {
                 StompHeaderAccessor accessor =
                         MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-                if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
+                if (accessor == null) {
+                    return message;
+                }
+                if (StompCommand.CONNECT.equals(accessor.getCommand())) {
                     String authHeader = accessor.getFirstNativeHeader("Authorization");
                     if (authHeader != null && authHeader.startsWith("Bearer ")) {
                         String token = authHeader.substring(7);
@@ -60,6 +68,18 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                             }
                         } catch (Exception ignored) { }
                     }
+                    // Không có token hợp lệ → từ chối kết nối
+                    if (accessor.getUser() == null) {
+                        throw new MessageDeliveryException("Unauthorized");
+                    }
+                } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
+                    Principal user = accessor.getUser();
+                    // Bỏ qua (không báo lỗi để tránh vòng lặp reconnect) nếu không có quyền
+                    if (user == null || !accessGuard.canSubscribe(user.getName(), accessor.getDestination())) {
+                        return null;
+                    }
+                } else if (StompCommand.SEND.equals(accessor.getCommand()) && accessor.getUser() == null) {
+                    return null;
                 }
                 return message;
             }

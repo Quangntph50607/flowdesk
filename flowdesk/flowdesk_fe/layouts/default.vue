@@ -149,13 +149,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from "vue";
+import { computed, ref, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useChatStore } from "../stores/chat";
 
 const authStore = useAuthStore();
 const chatStore = useChatStore();
+const chatNotifier = useChatNotifier();
 const route = useRoute();
 const userMenu = ref();
 const showProfileDialog = ref(false);
@@ -181,7 +182,7 @@ const navItems = computed(() => {
       to: "/dashboard/chat",
       label: "Chat",
       icon: "fa-solid fa-comments",
-      badge: chatStore.unreadTotal > 0 ? chatStore.unreadTotal : undefined,
+      badge: chatStore.globalUnread > 0 ? chatStore.globalUnread : undefined,
     },
   ];
 
@@ -227,5 +228,11 @@ function isActive(to: string) {
 
 onMounted(async () => {
   await authStore.fetchMe();
+  // Kết nối realtime dùng chung: badge unread, thông báo, trạng thái online
+  if (authStore.currentUser) chatNotifier.start();
+});
+
+onUnmounted(() => {
+  chatNotifier.stop();
 });
 </script>

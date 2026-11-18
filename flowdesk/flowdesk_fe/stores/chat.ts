@@ -33,7 +33,10 @@ export const useChatStore = defineStore("chat", {
     activeRoomId: null as number | null,
     messages: {} as Record<number, ChatMessage[]>,
     hasMore: {} as Record<number, boolean>,
-    currentPage: {} as Record<number, number>,
+    /** Tổng số conversation trên server (để biết còn "tải thêm" không). */
+    roomsTotal: 0,
+    /** Tổng tin chưa đọc toàn app (không tính room đã mute) — badge menu. */
+    globalUnread: 0,
   }),
 
   getters: {
@@ -43,6 +46,8 @@ export const useChatStore = defineStore("chat", {
     unreadTotal: (state): number =>
       state.rooms.reduce((sum, r) => sum + (r.unreadCount ?? 0), 0),
 
+    hasMoreRooms: (state): boolean => state.rooms.length < state.roomsTotal,
+
     roomMessages:
       (state) =>
       (roomId: number): ChatMessage[] =>
@@ -50,12 +55,28 @@ export const useChatStore = defineStore("chat", {
   },
 
   actions: {
-    setRooms(rooms: ChatRoom[]) {
+    setRooms(rooms: ChatRoom[], total?: number) {
       this.rooms = sortRooms(rooms.map(normalizeRoom));
+      this.roomsTotal = total ?? rooms.length;
+    },
+
+    /** Nối thêm trang conversation tiếp theo (bỏ trùng). */
+    appendRooms(rooms: ChatRoom[], total: number) {
+      const existing = new Set(this.rooms.map((r) => r.id));
+      this.rooms = sortRooms([
+        ...this.rooms,
+        ...rooms.filter((r) => !existing.has(r.id)).map(normalizeRoom),
+      ]);
+      this.roomsTotal = total;
+    },
+
+    setGlobalUnread(total: number) {
+      this.globalUnread = Math.max(0, total);
     },
 
     prependRoom(room: ChatRoom) {
       const normalized = normalizeRoom(room);
+      if (!this.rooms.some((r) => r.id === normalized.id)) this.roomsTotal += 1;
       this.rooms = sortRooms([
         normalized,
         ...this.rooms.filter((r) => r.id !== normalized.id),
@@ -76,12 +97,14 @@ export const useChatStore = defineStore("chat", {
       if (isFirstPage) {
         this.messages[roomId] = reversed;
       } else {
-        this.messages[roomId] = [...reversed, ...(this.messages[roomId] ?? [])];
+        const current = this.messages[roomId] ?? [];
+        const existing = new Set(current.map((m) => m.id));
+        this.messages[roomId] = [...reversed.filter((m) => !existing.has(m.id)), ...current];
       }
     },
 
     /** Nhận message qua realtime. Message cũ thì replace, message mới thì append. */
-    appendMessage(msg: ChatMessage) {
+    appendMessage(msg: ChatMessage, currentUserId?: number) {
       const roomId = msg.roomId;
       if (!this.messages[roomId]) this.messages[roomId] = [];
       const existingIndex = this.messages[roomId].findIndex((m) => m.id === msg.id);
@@ -98,7 +121,8 @@ export const useChatStore = defineStore("chat", {
         const room = { ...this.rooms[idx] };
         room.lastMessage = this.messageSummary(msg);
         room.lastMessageAt = msg.createdAt;
-        if (roomId !== this.activeRoomId) {
+        // Tin của chính mình (gửi từ tab/thiết bị khác) không tính là chưa đọc
+        if (roomId !== this.activeRoomId && msg.senderId !== currentUserId) {
           room.unreadCount = (room.unreadCount ?? 0) + 1;
         }
         this.rooms = sortRooms([room, ...this.rooms.filter((r) => r.id !== roomId)]);
@@ -144,6 +168,7 @@ export const useChatStore = defineStore("chat", {
     },
 
     removeRoom(roomId: number) {
+      if (this.rooms.some((r) => r.id === roomId)) this.roomsTotal = Math.max(0, this.roomsTotal - 1);
       this.rooms = this.rooms.filter((r) => r.id !== roomId);
       if (this.activeRoomId === roomId) this.activeRoomId = null;
     },
@@ -152,16 +177,13 @@ export const useChatStore = defineStore("chat", {
       this.hasMore[roomId] = value;
     },
 
-    setCurrentPage(roomId: number, page: number) {
-      this.currentPage[roomId] = page;
-    },
 
     reset() {
       this.rooms = [];
       this.activeRoomId = null;
       this.messages = {};
       this.hasMore = {};
-      this.currentPage = {};
+      this.roomsTotal = 0;
     },
   },
 });

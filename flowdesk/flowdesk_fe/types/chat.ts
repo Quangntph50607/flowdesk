@@ -20,6 +20,9 @@ export interface ChatRoom {
   owner?: boolean;
   pinned?: boolean;
   memberCount?: number;
+  /** DIRECT: người còn lại (để hiện online/offline). */
+  otherUserId?: number | null;
+  otherUserEmail?: string | null;
 }
 
 /** Trạng thái đang nhập của 1 user trong 1 room. */
