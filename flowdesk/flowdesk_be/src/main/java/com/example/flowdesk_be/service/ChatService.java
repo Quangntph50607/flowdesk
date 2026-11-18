@@ -5,12 +5,14 @@ import com.example.flowdesk_be.dto.request.OpenDirectRequest;
 import com.example.flowdesk_be.dto.response.ReadReceiptResponse;
 import com.example.flowdesk_be.dto.response.MessageResponse;
 import com.example.flowdesk_be.dto.response.RoomResponse;
+import com.example.flowdesk_be.dto.response.PageResponse;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
 import java.util.List;
 import java.util.Map;
 
 public interface ChatService {
-  List<RoomResponse> getMyRooms(Long workspaceId, String email);
+  PageResponse<RoomResponse> getMyRooms(Long workspaceId, String email, Integer limit, Integer page);
 
   List<RoomResponse> searchRooms(Long workspaceId, String keyword, String email);
 
@@ -18,7 +20,11 @@ public interface ChatService {
 
   RoomResponse createGroup(Long workspaceId, CreateGroupRequest req, String email);
 
-  Page<MessageResponse> getMessages(Long roomId, int page, int size, String email);
+  /** Cursor pagination: beforeId = null → tin mới nhất; ngược lại → tin cũ hơn beforeId. */
+  Slice<MessageResponse> getMessages(Long roomId, Long beforeId, int size, String email);
+
+  /** Tổng tin chưa đọc (không tính room đã mute). */
+  long countUnreadTotal(String email);
 
   Page<MessageResponse> searchMessages(Long roomId, String keyword, int page, int size, String email);
 
@@ -30,6 +36,9 @@ public interface ChatService {
   MessageResponse recallMessage(Long roomId, Long messageId, String email);
 
   void markRead(Long roomId, String email);
+
+  /** Tên hiển thị của user trong room (đồng thời kiểm tra quyền member). */
+  String getMemberDisplayName(Long roomId, String email);
 
   /** Trả về danh sách member đã đọc room, kèm thời điểm đọc cuối. */
   List<ReadReceiptResponse> getReadReceipts(Long roomId, String email);

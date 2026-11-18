@@ -35,7 +35,7 @@
             {{
               room.type === "GROUP"
                 ? `${room.memberCount ?? ""} thành viên`
-                : isOnline ? "Đang hoạt động" : "Ngoại tuyến"
+                : isOnline ? "Đang hoạt động" : lastSeenLabel
             }}
           </p>
         </div>
@@ -389,7 +389,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, watch, onUnmounted } from "vue";
+import { ref, computed, nextTick, watch, onUnmounted, onBeforeUnmount } from "vue";
 import type {
   ChatRoom,
   ChatMessage,
@@ -397,7 +397,7 @@ import type {
   ReadReceipt,
 } from "~/types/chat";
 import { useFileUpload } from "~/composables/useFileUpload";
-import { formatChatTime } from "~/utils/chatFormat";
+import { formatChatTime, formatLastSeen } from "~/utils/chatFormat";
 
 const props = defineProps<{
   room: ChatRoom;
@@ -412,7 +412,15 @@ const props = defineProps<{
   /** Read receipts của room này. */
   readReceipts?: ReadReceipt[];
   isOnline?: boolean;
+  /** Thời điểm offline gần nhất (ISO) của người kia trong DIRECT. */
+  lastSeenAt?: string | null;
 }>();
+
+// Cập nhật nhãn "Hoạt động X phút trước" mỗi phút
+const nowTick = ref(Date.now());
+const nowTimer = setInterval(() => (nowTick.value = Date.now()), 60_000);
+onBeforeUnmount(() => clearInterval(nowTimer));
+const lastSeenLabel = computed(() => formatLastSeen(props.lastSeenAt, nowTick.value));
 
 const emit = defineEmits<{
   (e: "send", content: string, replyToMessageId?: number | null): void;

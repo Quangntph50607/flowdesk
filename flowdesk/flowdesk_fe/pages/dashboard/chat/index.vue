@@ -92,6 +92,10 @@
         <ChatRoomList
           :rooms="chatStore.rooms"
           :searching="searchingRooms"
+          :online-emails="onlineEmails"
+          :has-more="chatStore.hasMoreRooms && !roomSearchKeyword"
+          :loading-more="loadingMoreRooms"
+          @load-more="loadMoreRooms"
           @select-room="openRoom"
           @open-new-direct="showNewDirect = true"
           @open-create-group="showCreateGroup = true"
@@ -147,6 +151,7 @@
             :typing-users="activeTypingUsers"
             :read-receipts="activeReadReceipts"
             :is-online="activeDirectOnline"
+            :last-seen-at="activeDirectLastSeen"
             @send="handleSend"
             @send-file="handleSendFile"
             @edit-message="handleEditMessage"
@@ -220,7 +225,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from "vue";
 import Menu from "primevue/menu";
 import { useAuthStore } from "../../../stores/auth";
 import { useChatStore } from "../../../stores/chat";
@@ -251,15 +256,18 @@ const toast = useAppToast();
 const confirm = useAppConfirm();
 const {
   connect,
-  disconnect,
+  offConnected,
+  releaseRooms,
+  onUserEvent: listenUserEvents,
   subscribeRoom,
+  unsubscribeRoom,
   sendWsMessage,
   sendWsFile,
   sendWsTyping,
   subscribePresence,
-  sendHeartbeat,
   isConnected,
 } = useChat();
+const route = useRoute();
 const { uploadAvatar } = useFileUpload();
 
 // ── Workspace state ───────────────────────────────────────────────
@@ -334,8 +342,13 @@ async function resolveWorkspace() {
     return;
   }
 
-  // Luôn tự động vào workspace đầu tiên (dropdown header để switch sau)
-  await enterWorkspace(availableWorkspaces.value[0].workspaceId);
+  // Mặc định vào workspace đầu tiên; nếu mở từ thông báo (?ws=) thì vào workspace đó
+  const queryWs = Number(route.query.ws);
+  const target =
+    availableWorkspaces.value.find((w) => w.workspaceId === queryWs) ??
+    availableWorkspaces.value[0];
+  await enterWorkspace(target.workspaceId);
+  await openRoomFromQuery();
 }
 
 async function enterWorkspace(workspaceId: number) {
@@ -344,22 +357,24 @@ async function enterWorkspace(workspaceId: number) {
   // Reset nếu đổi workspace
   if (resolvedWorkspaceId.value !== workspaceId) {
     chatStore.reset();
-    disconnect();
+    // Giữ kết nối chung, chỉ bỏ subscription room/presence của workspace cũ
+    releaseRooms();
+    onlineEmails.value = new Set();
+    lastSeenMap.value = {};
   }
 
   resolvedWorkspaceId.value = workspaceId;
 
   await Promise.all([loadRooms(), loadWorkspaceMembers()]);
 
-  connect(() => {
-    chatStore.rooms.forEach((r: any) => subscribeRoom(r.id, onRealtimeMessage));
-    subscribePresence(onPresenceEvent);
-    sendHeartbeat();
-  });
-
-  if (heartbeatTimer) clearInterval(heartbeatTimer);
-  heartbeatTimer = setInterval(sendHeartbeat, 20000);
+  // Gọi ngay nếu đã kết nối, và gọi lại mỗi lần reconnect
+  connect(onWsConnected);
   loading.value = false;
+}
+
+function onWsConnected() {
+  subscribeAllRooms();
+  loadPresence();
 }
 
 // ── Computed ──────────────────────────────────────────────────────
@@ -371,11 +386,24 @@ const activeRoomMessages = computed(() => {
 });
 
 const onlineEmails = ref<Set<string>>(new Set());
-const activeDirectOnline = computed(() => {
-  if (chatStore.activeRoom?.type !== "DIRECT") return false;
-  const other = groupMembers.value.find((m) => m.userId !== currentUserId.value);
-  return !!other?.email && onlineEmails.value.has(other.email);
+/** email → thời điểm offline gần nhất (ISO). */
+const lastSeenMap = ref<Record<string, string>>({});
+/** Workspace tổng của workspace đang xem (chat room thuộc workspace tổng). */
+const rootWorkspaceId = ref<number | null>(null);
+
+/** Email người còn lại trong DIRECT đang mở. */
+const activeDirectEmail = computed<string | null>(() => {
+  const room = chatStore.activeRoom;
+  if (room?.type !== "DIRECT") return null;
+  if (room.otherUserEmail) return room.otherUserEmail;
+  return groupMembers.value.find((m) => m.userId !== currentUserId.value)?.email ?? null;
 });
+const activeDirectOnline = computed(
+  () => !!activeDirectEmail.value && onlineEmails.value.has(activeDirectEmail.value),
+);
+const activeDirectLastSeen = computed(() =>
+  activeDirectEmail.value ? lastSeenMap.value[activeDirectEmail.value] ?? null : null,
+);
 
 /** Danh sách người đang nhập trong room hiện tại (không phải mình). */
 const activeTypingUsers = computed(() => {
@@ -416,7 +444,6 @@ const messageSearchResults = ref<ChatMessage[]>([]);
 // Map roomId → danh sách user đang nhập
 const typingStates = ref<Map<number, TypingState[]>>(new Map());
 const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
-let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 // ── Read receipts ─────────────────────────────────────────────────
 // Map roomId → danh sách read receipts
@@ -444,10 +471,21 @@ function wsId(): number {
 }
 
 // ── Data loading ──────────────────────────────────────────────────
+const ROOM_PAGE_SIZE = 20;
+const loadingMoreRooms = ref(false);
+const roomSearchKeyword = ref("");
+
+/**
+ * Tải lại danh sách conversation. Giữ nguyên số lượng đã tải (tối thiểu 1 trang)
+ * để refresh không làm mất các trang đã "tải thêm".
+ */
 async function loadRooms() {
   try {
-    const rooms = await chatApi.getRooms(wsId(), { limit: 20, page: 1 });
-    chatStore.setRooms(rooms);
+    const limit = Math.min(100, Math.max(ROOM_PAGE_SIZE, chatStore.rooms.length));
+    const { items, total } = await chatApi.getRoomsPage(wsId(), { limit, page: 1 });
+    roomSearchKeyword.value = "";
+    chatStore.setRooms(items, total);
+    subscribeAllRooms();
   } catch {
     toast.add({
       severity: "error",
@@ -455,6 +493,112 @@ async function loadRooms() {
       detail: "Không tải được danh sách chat",
       life: 3000,
     });
+  }
+}
+
+/** Kéo sidebar xuống cuối → tải trang conversation tiếp theo. */
+async function loadMoreRooms() {
+  if (loadingMoreRooms.value || !chatStore.hasMoreRooms || roomSearchKeyword.value) return;
+  loadingMoreRooms.value = true;
+  try {
+    const page = Math.floor(chatStore.rooms.length / ROOM_PAGE_SIZE) + 1;
+    const { items, total } = await chatApi.getRoomsPage(wsId(), {
+      limit: ROOM_PAGE_SIZE,
+      page,
+    });
+    chatStore.appendRooms(items, total);
+    subscribeAllRooms();
+  } catch {
+    /* ignore */
+  } finally {
+    loadingMoreRooms.value = false;
+  }
+}
+
+/** Mở conversation theo ?room= (khi bấm vào thông báo). */
+async function openRoomFromQuery() {
+  const roomId = Number(route.query.room);
+  if (!roomId) return;
+  if (!chatStore.rooms.some((r) => r.id === roomId)) await loadRooms();
+  if (chatStore.rooms.some((r) => r.id === roomId)) await openRoom(roomId);
+}
+
+/** Cập nhật badge tổng unread trên menu. */
+async function refreshGlobalUnread() {
+  try {
+    chatStore.setGlobalUnread(await chatApi.getUnreadSummary());
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Subscribe realtime cho mọi room đang có trong sidebar (bỏ qua room đã subscribe). */
+function subscribeAllRooms() {
+  if (!isConnected()) return;
+  chatStore.rooms.forEach((r: any) => subscribeRoom(r.id, onRealtimeMessage));
+}
+
+/** Lấy trạng thái online ban đầu và subscribe kênh presence của workspace. */
+async function loadPresence() {
+  try {
+    const snapshot = await chatApi.getPresence(wsId());
+    onlineEmails.value = new Set(snapshot.onlineEmails ?? []);
+    lastSeenMap.value = { ...(snapshot.lastSeen ?? {}) };
+    rootWorkspaceId.value = snapshot.rootWorkspaceId ?? null;
+    if (snapshot.rootWorkspaceId) {
+      subscribePresence(snapshot.rootWorkspaceId, onPresenceEvent);
+    }
+  } catch {
+    /* non-critical */
+  }
+}
+
+/** Event riêng của user: được thêm vào / bị loại khỏi một conversation. */
+function onUserEvent(event: any) {
+  const roomId = event?.roomId as number | undefined;
+  if (!roomId) return;
+  if (event.eventType === "ROOM_ADDED") {
+    loadRooms();
+  } else if (event.eventType === "NEW_MESSAGE") {
+    // Room chưa có trong sidebar (ở trang chưa tải) → tải lại để đẩy nó lên đầu
+    const sameWorkspace =
+      event.workspaceId === wsId() || event.workspaceId === rootWorkspaceId.value;
+    if (sameWorkspace && !chatStore.rooms.some((r) => r.id === roomId) && !roomSearchKeyword.value) {
+      loadRooms();
+    }
+  } else if (event.eventType === "ROOM_REMOVED") {
+    unsubscribeRoom(roomId);
+    chatStore.removeRoom(roomId);
+    if (chatStore.activeRoomId === roomId) {
+      chatStore.setActiveRoom(null);
+      showGroupInfo.value = false;
+    }
+  }
+}
+
+// ── Mark read khi đang mở room ───────────────────────────────────
+let markReadTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Đánh dấu đã đọc room đang mở (debounce để không gọi API liên tục). */
+function scheduleMarkRead(roomId: number) {
+  if (markReadTimer) clearTimeout(markReadTimer);
+  markReadTimer = setTimeout(async () => {
+    markReadTimer = null;
+    if (chatStore.activeRoomId !== roomId || document.visibilityState !== "visible") return;
+    chatStore.clearUnread(roomId);
+    try {
+      await chatApi.markRead(wsId(), roomId);
+      refreshGlobalUnread();
+    } catch {
+      /* ignore */
+    }
+  }, 600);
+}
+
+/** Quay lại tab → đánh dấu đã đọc các tin đến trong lúc tab bị ẩn. */
+function onVisibilityChange() {
+  if (document.visibilityState === "visible" && chatStore.activeRoomId) {
+    scheduleMarkRead(chatStore.activeRoomId);
   }
 }
 
@@ -475,13 +619,14 @@ async function loadWorkspaceMembers() {
   }
 }
 
-async function loadMessages(roomId: number, page: number, isFirst: boolean) {
+async function loadMessages(roomId: number, isFirst: boolean) {
   try {
     if (!isFirst) loadingMore.value = true;
-    const pageData = await chatApi.getMessages(wsId(), roomId, page, 30);
+    // Cursor: lấy tin cũ hơn tin cũ nhất đang có (không bị lệch khi có tin mới)
+    const oldestId = isFirst ? null : chatStore.roomMessages(roomId)[0]?.id ?? null;
+    const pageData = await chatApi.getMessages(wsId(), roomId, oldestId, 30);
     chatStore.setMessages(roomId, pageData.content ?? [], isFirst);
     chatStore.setHasMore(roomId, !pageData.last);
-    chatStore.setCurrentPage(roomId, page);
   } catch {
     toast.add({
       severity: "error",
@@ -523,13 +668,14 @@ async function openRoom(roomId: number) {
 
   if (isConnected()) subscribeRoom(roomId, onRealtimeMessage);
 
-  if (!chatStore.messages[roomId]) await loadMessages(roomId, 0, true);
+  if (!chatStore.messages[roomId]) await loadMessages(roomId, true);
 
   await loadGroupMembers(roomId);
   await loadReadReceipts(roomId);
 
   try {
     await chatApi.markRead(wsId(), roomId);
+    refreshGlobalUnread();
   } catch {
     /* ignore */
   }
@@ -556,6 +702,7 @@ async function handleToggleMute(roomId: number) {
   try {
     const updated = await chatApi.toggleMute(wsId(), roomId);
     chatStore.updateRoom(updated);
+    refreshGlobalUnread();
   } catch (e: any) {
     toast.add({
       severity: "error",
@@ -569,9 +716,8 @@ async function handleToggleMute(roomId: number) {
 async function handleLoadMore() {
   const roomId = chatStore.activeRoomId;
   if (!roomId || loadingMore.value || !chatStore.hasMore[roomId]) return;
-  const page = (chatStore.currentPage[roomId] ?? 0) + 1;
   const prevHeight = chatWindowRef.value?.getScrollHeight() ?? 0;
-  await loadMessages(roomId, page, false);
+  await loadMessages(roomId, false);
   await nextTick();
   chatWindowRef.value?.preserveScrollAfterPrepend(prevHeight);
 }
@@ -583,11 +729,7 @@ function handleSend(content: string, replyToMessageId?: number | null) {
 
 function handleTyping(typing: boolean) {
   if (!chatStore.activeRoomId || !authStore.currentUser) return;
-  sendWsTyping(
-    chatStore.activeRoomId,
-    authStore.currentUser.fullName ?? authStore.currentUser.email,
-    typing,
-  );
+  sendWsTyping(chatStore.activeRoomId, typing);
 }
 
 function handleSendFile(
@@ -709,6 +851,9 @@ function onPresenceEvent(event: any) {
   if (event.online) next.add(event.email);
   else next.delete(event.email);
   onlineEmails.value = next;
+  if (!event.online && event.at) {
+    lastSeenMap.value = { ...lastSeenMap.value, [event.email]: event.at };
+  }
 }
 
 function onRealtimeMessage(msg: any) {
@@ -769,15 +914,18 @@ function onRealtimeMessage(msg: any) {
   }
 
   // Normal message
-  chatStore.appendMessage(msg);
+  chatStore.appendMessage(msg, currentUserId.value);
   if (msg.roomId === chatStore.activeRoomId) {
     nextTick(() => chatWindowRef.value?.scrollToBottom(true));
+    // Đang mở room → cập nhật lastReadAt trên server (unread, read receipt)
+    if (msg.senderId !== currentUserId.value) scheduleMarkRead(msg.roomId);
   }
 }
 
 // ── Search ────────────────────────────────────────────────────────
 async function handleSearchRooms(keyword: string) {
   if (!keyword) {
+    roomSearchKeyword.value = "";
     // Clear search → tải lại danh sách đầy đủ
     await loadRooms();
     return;
@@ -785,6 +933,7 @@ async function handleSearchRooms(keyword: string) {
   searchingRooms.value = true;
   try {
     const results = await chatApi.searchRooms(wsId(), keyword);
+    roomSearchKeyword.value = keyword;
     chatStore.setRooms(results);
   } catch {
     toast.add({
@@ -836,10 +985,8 @@ async function handleJumpToSearchResult(messageId: number) {
     life: 1500,
   });
 
-  let page = chatStore.currentPage[roomId] ?? 0;
   while (chatStore.hasMore[roomId]) {
-    page += 1;
-    await loadMessages(roomId, page, false);
+    await loadMessages(roomId, false);
     if (chatStore.roomMessages(roomId).find((m) => m.id === messageId)) {
       await nextTick();
       chatWindowRef.value?.scrollToMessage?.(messageId);
@@ -1086,13 +1233,29 @@ async function handleDeleteRoom() {
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────
+let offUserEvents: (() => void) | null = null;
+
 onMounted(async () => {
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  offUserEvents = listenUserEvents(onUserEvent);
   await resolveWorkspace();
 });
 
+// Bấm thông báo khi đang ở trang chat → mở room tương ứng
+watch(
+  () => route.query.room,
+  () => {
+    if (resolvedWorkspaceId.value) openRoomFromQuery();
+  },
+);
+
 onUnmounted(() => {
-  disconnect();
-  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+  if (markReadTimer) clearTimeout(markReadTimer);
+  // Kết nối dùng chung do layout quản lý → chỉ gỡ phần của trang chat
+  offConnected(onWsConnected);
+  offUserEvents?.();
+  releaseRooms();
   chatStore.setActiveRoom(null);
   // Cleanup typing timers
   typingTimers.forEach((t) => clearTimeout(t));

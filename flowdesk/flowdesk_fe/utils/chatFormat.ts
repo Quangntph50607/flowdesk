@@ -50,3 +50,24 @@ export function formatMessageTime(dateStr: string | null | undefined): string {
     minute: "2-digit",
   });
 }
+
+/**
+ * Nhãn trạng thái offline: "Hoạt động 5 phút trước", "Hoạt động 2 giờ trước"...
+ * Không có thông tin → "Ngoại tuyến".
+ */
+export function formatLastSeen(
+  dateStr: string | null | undefined,
+  now: number = Date.now(),
+): string {
+  if (!dateStr) return "Ngoại tuyến";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "Ngoại tuyến";
+  const diffMin = Math.floor((now - d.getTime()) / 60_000);
+  if (diffMin < 1) return "Vừa mới hoạt động";
+  if (diffMin < 60) return `Hoạt động ${diffMin} phút trước`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `Hoạt động ${diffHour} giờ trước`;
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay < 7) return `Hoạt động ${diffDay} ngày trước`;
+  return "Ngoại tuyến";
+}

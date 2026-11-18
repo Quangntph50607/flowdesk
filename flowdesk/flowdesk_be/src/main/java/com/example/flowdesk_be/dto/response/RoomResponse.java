@@ -24,4 +24,8 @@ public class RoomResponse {
 
   @JsonProperty("isPinned")
   private boolean isPinned;
+
+  /** DIRECT: người còn lại (dùng hiển thị online/offline trên sidebar). */
+  private Long otherUserId;
+  private String otherUserEmail;
 }

@@ -15,6 +15,28 @@ public interface ChatRoomMemberRepository extends JpaRepository<ChatRoomMember, 
 
   boolean existsByRoomIdAndUserIdAndIsActiveTrue(Long roomId, Long userId);
 
+  /** Member active khác current user trong các room (dùng lấy "người kia" của DIRECT). */
+  @Query("""
+      SELECT m FROM ChatRoomMember m
+      JOIN FETCH m.user
+      WHERE m.room.id IN :roomIds
+        AND m.isActive = true
+        AND m.user.id <> :userId
+      """)
+  List<ChatRoomMember> findActiveOthersInRooms(
+      @Param("roomIds") List<Long> roomIds,
+      @Param("userId") Long userId);
+
+  /** User (theo email) là member active của room đang hoạt động. */
+  @Query("""
+      SELECT COUNT(m) > 0 FROM ChatRoomMember m
+      WHERE m.room.id = :roomId
+        AND m.user.email = :email
+        AND m.isActive = true
+        AND m.room.isActive = true
+      """)
+  boolean isActiveMemberByEmail(@Param("roomId") Long roomId, @Param("email") String email);
+
   @Query("""
       SELECT m FROM ChatRoomMember m
       JOIN FETCH m.room r

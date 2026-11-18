@@ -72,7 +72,10 @@
     </div>
 
     <!-- Room list -->
-    <div class="flex-1 overflow-y-auto chat-room-list-scroll px-2">
+    <div
+      class="flex-1 overflow-y-auto chat-room-list-scroll px-2"
+      @scroll="onListScroll"
+    >
       <div
         v-for="room in filteredRooms"
         :key="room.id"
@@ -103,6 +106,7 @@
             <span v-else>{{ room.avatarInitial }}</span>
           </div>
           <span
+            v-if="isRoomOnline(room)"
             class="absolute bottom-[1px] right-[1px] w-[10px] h-[10px] rounded-full bg-green-500 border-2 border-white"
           />
         </div>
@@ -115,9 +119,11 @@
                 v-if="room.isPinned"
                 class="fa-solid fa-thumbtack shrink-0 text-[10px] text-slate-500"
               />
-              <span class="text-sm font-semibold text-slate-900 truncate">{{
-                room.name
-              }}</span>
+              <span
+                class="text-sm text-slate-900 truncate"
+                :class="hasUnread(room) ? 'font-bold' : 'font-semibold'"
+                >{{ room.name }}</span
+              >
               <i
                 v-if="room.isMuted"
                 class="pi pi-bell-slash shrink-0 text-[10px] text-slate-400"
@@ -131,17 +137,19 @@
               >
                 <i class="pi pi-ellipsis-h text-[12px]" />
               </button>
-              <span class="text-[11px] text-slate-400">{{
-                formatChatTime(room.lastMessageAt)
-              }}</span>
+              <span
+                class="text-[11px]"
+                :class="hasUnread(room) ? 'text-slate-900 font-semibold' : 'text-slate-400'"
+                >{{ formatChatTime(room.lastMessageAt) }}</span
+              >
             </div>
           </div>
           <div class="flex items-center justify-between gap-1 mt-0.5">
             <span
               class="text-[12px] truncate"
               :class="
-                room.id === chatStore.activeRoomId
-                  ? 'text-slate-400'
+                hasUnread(room)
+                  ? 'text-slate-900 font-semibold'
                   : 'text-slate-400'
               "
               style="max-width: 150px"
@@ -157,6 +165,18 @@
             />
           </div>
         </div>
+      </div>
+
+      <!-- Tải thêm -->
+      <div v-if="hasMore" class="py-3 text-center">
+        <i v-if="loadingMore" class="pi pi-spin pi-spinner text-slate-400 text-[13px]" />
+        <button
+          v-else
+          class="text-[12px] text-slate-500 hover:text-slate-800"
+          @click="$emit('loadMore')"
+        >
+          Tải thêm
+        </button>
       </div>
 
       <!-- Empty -->
@@ -181,6 +201,11 @@ const props = defineProps<{
   rooms: ChatRoom[];
   /** Đang gọi API search (hiển thị loading). */
   searching?: boolean;
+  /** Email các user đang online (để hiện chấm xanh cho DIRECT). */
+  onlineEmails?: Set<string>;
+  /** Còn conversation chưa tải. */
+  hasMore?: boolean;
+  loadingMore?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -191,7 +216,29 @@ const emit = defineEmits<{
   (e: "toggleMute", id: number): void;
   /** Tìm conversation theo từ khóa (gọi backend). Truyền rỗng để clear. */
   (e: "search", keyword: string): void;
+  /** Cuộn tới cuối danh sách → tải trang tiếp theo. */
+  (e: "loadMore"): void;
 }>();
+
+/** Có tin chưa đọc (room đang mở thì coi như đã đọc). */
+function hasUnread(room: ChatRoom): boolean {
+  return room.unreadCount > 0 && room.id !== chatStore.activeRoomId;
+}
+
+function isRoomOnline(room: ChatRoom): boolean {
+  return (
+    room.type === "DIRECT" &&
+    !!room.otherUserEmail &&
+    !!props.onlineEmails?.has(room.otherUserEmail)
+  );
+}
+
+function onListScroll(event: Event) {
+  const el = event.target as HTMLElement;
+  if (props.hasMore && !props.loadingMore && el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
+    emit("loadMore");
+  }
+}
 
 const chatStore = useChatStore();
 const search = ref("");

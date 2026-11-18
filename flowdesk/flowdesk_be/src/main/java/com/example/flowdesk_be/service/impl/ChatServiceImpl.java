@@ -4,6 +4,7 @@ import com.example.flowdesk_be.dto.request.CreateGroupRequest;
 import com.example.flowdesk_be.dto.request.OpenDirectRequest;
 import com.example.flowdesk_be.dto.response.GroupMemberResponse;
 import com.example.flowdesk_be.dto.response.MessageResponse;
+import com.example.flowdesk_be.dto.response.PageResponse;
 import com.example.flowdesk_be.dto.response.ReadReceiptResponse;
 import com.example.flowdesk_be.dto.response.RoomResponse;
 import com.example.flowdesk_be.entity.*;
@@ -12,13 +13,18 @@ import com.example.flowdesk_be.repository.*;
 import com.example.flowdesk_be.service.ChatService;
 import com.example.flowdesk_be.service.StorageService;
 import lombok.RequiredArgsConstructor;
+import com.example.flowdesk_be.service.ChatSubscriptionRegistry;
 import org.springframework.data.domain.*;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +44,10 @@ public class ChatServiceImpl implements ChatService {
   private final WorkspaceMemberRepository workspaceMemberRepo;
   private final WorkspaceRepository workspaceRepo;
   private final StorageService storageService;
+  private final SimpMessagingTemplate messagingTemplate;
+  private final ChatSubscriptionRegistry subscriptionRegistry;
+
+  private static final int MAX_GROUP_NAME_LENGTH = 150;
 
   @Value("${app.storage.b2.bucket-name}")
   private String bucketName;
@@ -62,9 +72,13 @@ public class ChatServiceImpl implements ChatService {
 
   // Kiểm tra user còn active trong room
   private ChatRoomMember assertActiveMember(Long roomId, Long userId) {
-    return memberRepo.findByRoomIdAndUserId(roomId, userId)
+    ChatRoomMember membership = memberRepo.findByRoomIdAndUserId(roomId, userId)
         .filter(ChatRoomMember::getIsActive)
         .orElseThrow(() -> AppException.forbidden("Bạn không thuộc conversation này"));
+    if (!Boolean.TRUE.equals(membership.getRoom().getIsActive())) {
+      throw AppException.forbidden("Cuộc trò chuyện không còn hoạt động");
+    }
+    return membership;
   }
 
   private ChatMessage findMessageInRoom(Long messageId, Long roomId) {
@@ -112,66 +126,94 @@ public class ChatServiceImpl implements ChatService {
     }
   }
 
-  // Build RoomResponse cho 1 membership (tính unread bên trong)
+  // Build RoomResponse cho 1 membership
   private RoomResponse buildRoomResponse(ChatRoomMember membership, Long currentUserId) {
-    ChatRoom room = membership.getRoom();
+    return buildRoomResponses(List.of(membership), currentUserId).get(0);
+  }
 
-    // Tên hiển thị: nếu DIRECT thì lấy tên người kia
-    String name = room.getName();
-    String avatarInitial = "?";
-    String avatarUrl = room.getAvatarUrl();
-    if ("DIRECT".equals(room.getType())) {
-      ChatRoomMember other = memberRepo.findByRoomIdAndIsActiveTrue(room.getId())
-          .stream()
-          .filter(m -> !m.getUser().getId().equals(currentUserId))
-          .findFirst()
-          .orElse(null);
-      if (other != null) {
-        name = other.getUser().getFullName();
-        avatarInitial = name != null && !name.isEmpty()
-            ? String.valueOf(name.charAt(0)).toUpperCase()
-            : "?";
-        avatarUrl = other.getUser().getAvatarUrl();
-      }
-    } else if (name != null && !name.isEmpty()) {
-      avatarInitial = String.valueOf(name.charAt(0)).toUpperCase();
+  /**
+   * Build RoomResponse cho nhiều membership với số query cố định
+   * (người kia của DIRECT, tin cuối, unread) thay vì 3 query / room.
+   */
+  private List<RoomResponse> buildRoomResponses(List<ChatRoomMember> memberships, Long currentUserId) {
+    if (memberships.isEmpty()) {
+      return List.of();
+    }
+    List<Long> roomIds = memberships.stream().map(m -> m.getRoom().getId()).toList();
+
+    Map<Long, User> otherByRoom = new HashMap<>();
+    for (ChatRoomMember other : memberRepo.findActiveOthersInRooms(roomIds, currentUserId)) {
+      otherByRoom.putIfAbsent(other.getRoom().getId(), other.getUser());
+    }
+    Map<Long, ChatMessage> lastByRoom = new HashMap<>();
+    for (ChatMessage last : messageRepo.findLastMessagesOfRooms(roomIds)) {
+      lastByRoom.put(last.getRoom().getId(), last);
+    }
+    Map<Long, Long> unreadByRoom = new HashMap<>();
+    for (Object[] row : messageRepo.countUnreadByRooms(currentUserId, roomIds)) {
+      unreadByRoom.put((Long) row[0], (Long) row[1]);
     }
 
-    // Last message
-    Page<ChatMessage> lastPage = messageRepo.findByRoomIdWithSender(
-        room.getId(), PageRequest.of(0, 1));
-    ChatMessage last = lastPage.isEmpty() ? null : lastPage.getContent().get(0);
+    List<RoomResponse> result = new ArrayList<>(memberships.size());
+    for (ChatRoomMember membership : memberships) {
+      ChatRoom room = membership.getRoom();
+      String name = room.getName();
+      String avatarUrl = room.getAvatarUrl();
+      User other = null;
+      if ("DIRECT".equals(room.getType())) {
+        other = otherByRoom.get(room.getId());
+        if (other != null) {
+          name = other.getFullName();
+          avatarUrl = other.getAvatarUrl();
+        }
+      }
+      String avatarInitial = name != null && !name.isEmpty()
+          ? String.valueOf(name.charAt(0)).toUpperCase()
+          : "?";
 
-    // Unread
-    long unread = messageRepo.countUnread(
-        room.getId(), currentUserId, membership.getLastReadAt());
+      ChatMessage last = lastByRoom.get(room.getId());
+      boolean recalled = last != null && Boolean.TRUE.equals(last.getIsRecalled());
 
-    return RoomResponse.builder()
-        .id(room.getId())
-        .type(room.getType())
-        .name(name)
-        .avatarInitial(avatarInitial)
-        .avatarUrl(resolveSharedFileUrl(avatarUrl))
-        .description(room.getDescription())
-        .lastMessage(last == null ? null
-            : (last.getIsRecalled() ? "Tin nhắn đã được thu hồi" : last.getContent()))
-        .lastMessageSenderName(
-            last == null ? null
-                : ("GROUP".equals(room.getType()) && !last.getIsRecalled()
-                    ? last.getSender() == null ? null : last.getSender().getFullName()
-                    : null))
-        .lastMessageAt(last == null ? room.getCreatedAt() : last.getCreatedAt())
-        .unreadCount((int) unread)
-        .isOwner(Boolean.TRUE.equals(membership.getIsOwner()))
-        .isMuted(Boolean.TRUE.equals(membership.getIsMuted()))
-        .isPinned(Boolean.TRUE.equals(membership.getIsPinned()))
-        .build();
+      result.add(RoomResponse.builder()
+          .id(room.getId())
+          .type(room.getType())
+          .name(name)
+          .avatarInitial(avatarInitial)
+          .avatarUrl(resolveSharedFileUrl(avatarUrl))
+          .description(room.getDescription())
+          .lastMessage(last == null ? null : (recalled ? "Tin nhắn đã được thu hồi" : summarize(last)))
+          .lastMessageSenderName(last != null && "GROUP".equals(room.getType()) && !recalled
+              && !"SYSTEM".equals(last.getType()) && last.getSender() != null
+              ? last.getSender().getFullName()
+              : null)
+          .lastMessageAt(last == null ? room.getCreatedAt() : last.getCreatedAt())
+          .unreadCount(unreadByRoom.getOrDefault(room.getId(), 0L).intValue())
+          .isOwner(Boolean.TRUE.equals(membership.getIsOwner()))
+          .isMuted(Boolean.TRUE.equals(membership.getIsMuted()))
+          .isPinned(Boolean.TRUE.equals(membership.getIsPinned()))
+          .otherUserId(other == null ? null : other.getId())
+          .otherUserEmail(other == null ? null : other.getEmail())
+          .build());
+    }
+    return result;
+  }
+
+  /** Nội dung rút gọn của tin nhắn (sidebar, thông báo). */
+  private String summarize(ChatMessage msg) {
+    return switch (msg.getType()) {
+      case "IMAGE" -> "Đã gửi ảnh";
+      case "VIDEO" -> "Đã gửi video";
+      case "AUDIO" -> "Đã gửi audio";
+      case "FILE" -> msg.getFileName() != null ? msg.getFileName() : "Đã gửi file";
+      default -> msg.getContent();
+    };
   }
 
   // ── API Methods ──────────────────────────────────────────────────
 
   @Override
-  public List<RoomResponse> getMyRooms(Long workspaceId, String email) {
+  @Transactional(readOnly = true)
+  public PageResponse<RoomResponse> getMyRooms(Long workspaceId, String email, Integer limit, Integer page) {
     User me = findUser(email);
     Workspace ws = findWorkspace(workspaceId);
 
@@ -181,13 +223,15 @@ public class ChatServiceImpl implements ChatService {
         ? ws.getParent().getId()
         : workspaceId;
 
+    // Phân trang trên danh sách membership (rẻ), chỉ build chi tiết cho trang được yêu cầu
     List<ChatRoomMember> memberships = memberRepo.findMyRoomsInWorkspace(me.getId(), effectiveWorkspaceId);
-    return memberships.stream()
-        .map(m -> buildRoomResponse(m, me.getId()))
-        .toList();
+    PageResponse<ChatRoomMember> slice = PageResponse.fromList(memberships, limit, page);
+    return PageResponse.of(buildRoomResponses(slice.getItems(), me.getId()),
+        slice.getTotal(), slice.getLimit(), slice.getPage());
   }
 
   @Override
+  @Transactional(readOnly = true)
   public List<RoomResponse> searchRooms(Long workspaceId, String keyword, String email) {
     User me = findUser(email);
     Workspace ws = findWorkspace(workspaceId);
@@ -198,8 +242,7 @@ public class ChatServiceImpl implements ChatService {
 
     if (keyword == null || keyword.isBlank()) {
       // Keyword rỗng → trả về toàn bộ (giống getMyRooms)
-      return memberRepo.findMyRoomsInWorkspace(me.getId(), effectiveWorkspaceId)
-          .stream().map(m -> buildRoomResponse(m, me.getId())).toList();
+      return buildRoomResponses(memberRepo.findMyRoomsInWorkspace(me.getId(), effectiveWorkspaceId), me.getId());
     }
 
     String kw = keyword.trim();
@@ -230,10 +273,11 @@ public class ChatServiceImpl implements ChatService {
       return bTime.compareTo(aTime);
     });
 
-    return merged.stream().map(m -> buildRoomResponse(m, me.getId())).toList();
+    return buildRoomResponses(merged, me.getId());
   }
 
   @Override
+  @Transactional(readOnly = true)
   public Page<MessageResponse> searchMessages(Long roomId, String keyword, int page, int size, String email) {
     User me = findUser(email);
     assertActiveMember(roomId, me.getId());
@@ -268,6 +312,10 @@ public class ChatServiceImpl implements ChatService {
     assertInWorkspace(effectiveWorkspaceId, me.getId());
     assertInWorkspace(effectiveWorkspaceId, target.getId());
 
+    // Khoá dòng user có id nhỏ hơn → 2 request mở DIRECT cùng cặp user chạy tuần tự,
+    // request sau sẽ thấy room mà request trước đã tạo (tránh tạo trùng)
+    userRepo.findByIdForUpdate(Math.min(me.getId(), target.getId()));
+
     // Tìm room DIRECT đã có
     return roomRepo.findDirectRoom(effectiveWorkspaceId, me.getId(), target.getId())
         .map(existing -> {
@@ -286,6 +334,7 @@ public class ChatServiceImpl implements ChatService {
 
           memberRepo.save(ChatRoomMember.builder().room(room).user(me).build());
           memberRepo.save(ChatRoomMember.builder().room(room).user(target).build());
+          notifyUser(target.getEmail(), "ROOM_ADDED", room.getId());
 
           ChatRoomMember myMembership = memberRepo.findByRoomIdAndUserId(room.getId(), me.getId()).orElseThrow();
           return buildRoomResponse(myMembership, me.getId());
@@ -332,6 +381,7 @@ public class ChatServiceImpl implements ChatService {
           .user(member)
           .invitedBy(me)
           .build());
+      notifyUser(member.getEmail(), "ROOM_ADDED", roomId);
     }
 
     // System message
@@ -342,13 +392,23 @@ public class ChatServiceImpl implements ChatService {
   }
 
   @Override
-  public Page<MessageResponse> getMessages(Long roomId, int page, int size, String email) {
+  @Transactional(readOnly = true)
+  public Slice<MessageResponse> getMessages(Long roomId, Long beforeId, int size, String email) {
     User me = findUser(email);
     assertActiveMember(roomId, me.getId());
 
-    Pageable pageable = PageRequest.of(page, size);
-    Page<ChatMessage> msgPage = messageRepo.findByRoomIdWithSender(roomId, pageable);
-    return msgPage.map(msg -> MessageResponse.from(msg, resolveSharedFileUrl(msg.getSender().getAvatarUrl())));
+    int safeSize = Math.min(Math.max(size, 1), 100);
+    // Lấy dư 1 bản ghi để biết còn tin cũ hơn hay không
+    Pageable limit = PageRequest.of(0, safeSize + 1);
+    List<ChatMessage> rows = beforeId == null
+        ? messageRepo.findLatest(roomId, limit)
+        : messageRepo.findBefore(roomId, beforeId, limit);
+    boolean hasMore = rows.size() > safeSize;
+    List<MessageResponse> content = rows.stream()
+        .limit(safeSize)
+        .map(msg -> MessageResponse.from(msg, resolveSharedFileUrl(msg.getSender().getAvatarUrl())))
+        .toList();
+    return new SliceImpl<>(content, PageRequest.of(0, safeSize), hasMore);
   }
 
   @Override
@@ -359,8 +419,11 @@ public class ChatServiceImpl implements ChatService {
     ChatRoomMember membership = assertActiveMember(roomId, me.getId());
     ChatRoom room = membership.getRoom();
 
-    // Normalize type – chỉ chấp nhận các giá trị hợp lệ
+    // Normalize type – chỉ chấp nhận các giá trị hợp lệ (client không được gửi SYSTEM)
     String msgType = normalizeMessageType(type);
+    if (content == null || content.isBlank()) {
+      throw AppException.badRequest("Nội dung không được để trống");
+    }
     ChatMessage replyTo = findReplyMessage(roomId, replyToMessageId);
 
     ChatMessage msg = ChatMessage.builder()
@@ -377,6 +440,8 @@ public class ChatServiceImpl implements ChatService {
     // Cập nhật updatedAt của room để sort đúng
     room.setUpdatedAt(LocalDateTime.now());
     roomRepo.save(room);
+
+    notifyNewMessage(room, msg, me);
 
     return MessageResponse.from(msg, resolveSharedFileUrl(me.getAvatarUrl()));
   }
@@ -440,9 +505,23 @@ public class ChatServiceImpl implements ChatService {
       case "FILE" -> "FILE";
       case "VIDEO" -> "VIDEO";
       case "AUDIO" -> "AUDIO";
-      case "SYSTEM" -> "SYSTEM";
-      default -> "TEXT";
+      case "TEXT" -> "TEXT";
+      default -> throw AppException.badRequest("Loại tin nhắn không hợp lệ");
     };
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public long countUnreadTotal(String email) {
+    return messageRepo.countUnreadTotal(findUser(email).getId());
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public String getMemberDisplayName(Long roomId, String email) {
+    User me = findUser(email);
+    assertActiveMember(roomId, me.getId());
+    return me.getFullName() != null && !me.getFullName().isBlank() ? me.getFullName() : me.getEmail();
   }
 
   @Override
@@ -523,9 +602,15 @@ public class ChatServiceImpl implements ChatService {
           m.setInvitedBy(me);
           m.setRemovedBy(null);
           m.setLeftAt(null);
+          // Tin trong thời gian không còn là member không tính là chưa đọc
+          m.setLastReadAt(LocalDateTime.now());
           memberRepo.save(m);
         },
-        () -> memberRepo.save(ChatRoomMember.builder().room(room).user(target).invitedBy(me).build()));
+        () -> memberRepo.save(ChatRoomMember.builder().room(room).user(target).invitedBy(me)
+            // Lịch sử trước khi được thêm không tính là chưa đọc
+            .lastReadAt(LocalDateTime.now())
+            .build()));
+    notifyUser(target.getEmail(), "ROOM_ADDED", roomId);
 
     saveSystemMessage(room, me.getFullName() + " đã thêm " + target.getFullName() + " vào nhóm.");
   }
@@ -551,6 +636,8 @@ public class ChatServiceImpl implements ChatService {
     memberRepo.save(target);
 
     User targetUser = target.getUser();
+    kickFromRoom(targetUser.getEmail(), roomId);
+    notifyUser(targetUser.getEmail(), "ROOM_REMOVED", roomId);
     saveSystemMessage(myMembership.getRoom(),
         me.getFullName() + " đã xóa " + targetUser.getFullName() + " khỏi nhóm.");
   }
@@ -569,6 +656,8 @@ public class ChatServiceImpl implements ChatService {
     membership.setIsActive(false);
     membership.setLeftAt(LocalDateTime.now());
     memberRepo.save(membership);
+    kickFromRoom(me.getEmail(), roomId);
+    notifyUser(me.getEmail(), "ROOM_REMOVED", roomId);
     saveSystemMessage(membership.getRoom(), me.getFullName() + " đã rời nhóm.");
   }
 
@@ -583,6 +672,13 @@ public class ChatServiceImpl implements ChatService {
     ChatRoom room = membership.getRoom();
     if (!"GROUP".equals(room.getType())) {
       throw AppException.badRequest("Chỉ có thể đổi tên GROUP");
+    }
+    if (newName == null || newName.isBlank()) {
+      throw AppException.badRequest("Tên nhóm không được để trống");
+    }
+    newName = newName.trim();
+    if (newName.length() > MAX_GROUP_NAME_LENGTH) {
+      throw AppException.badRequest("Tên nhóm tối đa " + MAX_GROUP_NAME_LENGTH + " ký tự");
     }
     room.setName(newName);
     roomRepo.save(room);
@@ -610,6 +706,7 @@ public class ChatServiceImpl implements ChatService {
   }
 
   @Override
+  @Transactional(readOnly = true)
   public Map<String, Object> getRoomMembers(Long roomId, String email) {
     User me = findUser(email);
     assertActiveMember(roomId, me.getId());
@@ -715,19 +812,87 @@ public class ChatServiceImpl implements ChatService {
     if (!"GROUP".equals(room.getType())) {
       throw AppException.badRequest("Chỉ có thể xóa GROUP");
     }
+    // Lấy danh sách member trước khi vô hiệu hoá để báo cho họ
+    List<String> memberEmails = memberRepo.findByRoomIdAndIsActiveTrue(roomId).stream()
+        .map(m -> m.getUser().getEmail())
+        .toList();
     room.setIsActive(false);
     roomRepo.save(room);
+    memberEmails.forEach(memberEmail -> notifyUser(memberEmail, "ROOM_REMOVED", roomId));
+    kickFromRoom(null, roomId);
   }
 
   // ── Private Utils ────────────────────────────────────────────────
 
   private void saveSystemMessage(ChatRoom room, String text) {
     // sender_id = createdBy của room (người tạo đại diện cho system)
-    messageRepo.save(ChatMessage.builder()
+    ChatMessage saved = messageRepo.save(ChatMessage.builder()
         .room(room)
         .sender(room.getCreatedBy())
         .type("SYSTEM")
         .content(text)
         .build());
+    // Build response trong transaction, gửi realtime sau khi commit
+    MessageResponse response = MessageResponse.from(saved,
+        resolveSharedFileUrl(saved.getSender().getAvatarUrl()));
+    Long roomId = room.getId();
+    afterCommit(() -> messagingTemplate.convertAndSend("/topic/room/" + roomId, response));
+  }
+
+  /**
+   * Báo tin mới cho từng member (trừ người gửi) qua kênh riêng:
+   * dùng cho badge unread, thông báo ngoài trang chat, và cập nhật sidebar
+   * với room chưa được tải. Kèm cờ muted theo từng người nhận.
+   */
+  private void notifyNewMessage(ChatRoom room, ChatMessage msg, User sender) {
+    boolean isGroup = "GROUP".equals(room.getType());
+    String preview = summarize(msg);
+    if (preview != null && preview.length() > 120) {
+      preview = preview.substring(0, 120) + "…";
+    }
+    String roomName = isGroup ? room.getName() : sender.getFullName();
+    for (ChatRoomMember member : memberRepo.findByRoomIdAndIsActiveTrue(room.getId())) {
+      if (member.getUser().getId().equals(sender.getId())) {
+        continue;
+      }
+      Map<String, Object> payload = new LinkedHashMap<>();
+      payload.put("eventType", "NEW_MESSAGE");
+      payload.put("roomId", room.getId());
+      payload.put("workspaceId", room.getWorkspace().getId());
+      payload.put("roomType", room.getType());
+      payload.put("roomName", roomName);
+      payload.put("messageId", msg.getId());
+      payload.put("senderId", sender.getId());
+      payload.put("senderName", sender.getFullName());
+      payload.put("preview", preview);
+      payload.put("muted", Boolean.TRUE.equals(member.getIsMuted()));
+      String email = member.getUser().getEmail();
+      afterCommit(() -> messagingTemplate.convertAndSendToUser(email, "/queue/chat", (Object) payload));
+    }
+  }
+
+  /** Gửi event riêng cho 1 user qua /user/queue/chat (sau khi commit). */
+  private void notifyUser(String email, String eventType, Long roomId) {
+    afterCommit(() -> messagingTemplate.convertAndSendToUser(email, "/queue/chat",
+        (Object) Map.of("eventType", eventType, "roomId", roomId)));
+  }
+
+  /** Cắt subscription realtime của room (email = null → tất cả user). */
+  private void kickFromRoom(String email, Long roomId) {
+    afterCommit(() -> subscriptionRegistry.forceUnsubscribe(
+        "/topic/room/" + roomId, email, messagingTemplate.getMessageChannel()));
+  }
+
+  private void afterCommit(Runnable action) {
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          action.run();
+        }
+      });
+    } else {
+      action.run();
+    }
   }
 }

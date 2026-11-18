@@ -59,9 +59,8 @@ public class ChatWebSocketController {
     boolean isTyping = Boolean.TRUE.equals(payload.get("typing"));
     String email = principal.getName();
 
-    // Lấy tên user để hiển thị "X đang nhập..."
-    // Dùng email làm fallback nếu chưa load được fullName
-    String displayName = (String) payload.getOrDefault("userName", email);
+    // Kiểm tra quyền member + lấy tên hiển thị từ DB (không tin tên do client gửi)
+    String displayName = chatService.getMemberDisplayName(roomId, email);
 
     messagingTemplate.convertAndSend("/topic/room/" + roomId, (Object) Map.of(
         "eventType", "TYPING",
